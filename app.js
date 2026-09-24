@@ -50,6 +50,7 @@
 
   class AudioEngine {
     constructor() {
+      this.requestPlaybackSession();
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.context = new AudioContext();
       this.master = this.context.createGain();
@@ -64,7 +65,24 @@
       this.voices = new Map();
     }
 
+    requestPlaybackSession(refresh = false) {
+      if (!("audioSession" in navigator)) return;
+      try {
+        // A music instrument is primary media, not an incidental notification.
+        // "playback" keeps it audible through iPhone's Ring/Silent switch.
+        if (refresh && navigator.audioSession.type === "playback") {
+          // Reassert the category after iOS recreates its media process. Merely
+          // assigning "playback" again can be ignored by affected Safari builds.
+          navigator.audioSession.type = "ambient";
+          window.setTimeout(() => { navigator.audioSession.type = "playback"; }, 0);
+        } else {
+          navigator.audioSession.type = "playback";
+        }
+      } catch { /* Audio Session API is experimental and may be read-only. */ }
+    }
+
     unlock() {
+      this.requestPlaybackSession(true);
       // iOS Safari needs an audio source to start synchronously inside the tap.
       // A one-sample silent buffer unlocks the route without making a sound.
       const buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
