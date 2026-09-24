@@ -53,13 +53,46 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.context = new AudioContext();
       this.master = this.context.createGain();
-      this.master.gain.value = 0.72;
-      this.master.connect(this.context.destination);
+      this.master.gain.value = 0.62;
+
+      // Send the same mono mix to both output channels explicitly. This avoids
+      // one-sided playback on a few iOS/Safari audio routes and Bluetooth sets.
+      this.stereo = this.context.createChannelMerger(2);
+      this.master.connect(this.stereo, 0, 0);
+      this.master.connect(this.stereo, 0, 1);
+      this.stereo.connect(this.context.destination);
       this.voices = new Map();
     }
 
-    async resume() {
-      if (this.context.state !== "running") await this.context.resume();
+    unlock() {
+      // iOS Safari needs an audio source to start synchronously inside the tap.
+      // A one-sample silent buffer unlocks the route without making a sound.
+      const buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
+      const source = this.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.master);
+      source.start(0);
+      return this.context.state === "running" ? Promise.resolve() : this.context.resume();
+    }
+
+    preview(voiceName, normalizedY = 0.5) {
+      const settings = voiceSettings[voiceName] || voiceSettings.bloom;
+      const now = this.context.currentTime;
+      const osc = this.context.createOscillator();
+      const filter = this.context.createBiquadFilter();
+      const gain = this.context.createGain();
+      osc.type = settings.wave;
+      osc.frequency.value = yToFrequency(normalizedY);
+      osc.detune.value = settings.detune;
+      filter.type = "lowpass";
+      filter.frequency.value = settings.filter;
+      filter.Q.value = voiceName === "spark" ? 5 : 1.4;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(settings.gain * 0.72, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start(now);
+      osc.stop(now + 0.21);
     }
 
     update(hits) {
@@ -290,11 +323,24 @@
       showToast("Web Audio is not supported here");
       return;
     }
-    await audio.resume();
+    try {
+      await audio.unlock();
+    } catch {
+      showToast("Tap play once more to enable sound");
+      return;
+    }
+    if (audio.context.state !== "running") {
+      showToast("Turn off Silent Mode, then tap play again");
+      return;
+    }
     state.playing = !state.playing;
     playButton.setAttribute("aria-pressed", String(state.playing));
     playButton.setAttribute("aria-label", state.playing ? "Pause drawing" : "Play drawing");
     if (!state.playing) audio.silence();
+    else if (state.strokes.length) {
+      const first = state.strokes[0];
+      audio.preview(first.voice, first.points[0]?.y ?? 0.5);
+    }
     showToast(state.playing ? "Playing your drawing" : "Paused");
   }
 
@@ -309,6 +355,13 @@
       swatch.classList.toggle("selected", selected);
       swatch.setAttribute("aria-checked", String(selected));
     });
+
+    // Color taps double as sound previews and provide another iOS-safe gesture
+    // with which to unlock Web Audio.
+    if (window.AudioContext || window.webkitAudioContext) {
+      if (!audio) audio = new AudioEngine();
+      audio.unlock().then(() => audio.preview(state.voice)).catch(() => {});
+    }
   }
 
   function toggleEraser() {

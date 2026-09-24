@@ -5,6 +5,8 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 ## Features
 
 - Pressure-aware freehand drawing with four color/sound voices
+- Tap-to-preview colors and an iOS-compatible audio unlock
+- Explicit dual-channel output for centered headphone playback
 - Continuous play/pause sweep with adjustable duration
 - Pentatonic pitch mapping from the canvas' vertical axis
 - Stroke eraser, undo, and clear
