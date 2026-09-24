@@ -500,6 +500,11 @@
       audio?.silence();
     }
   });
+  // Safari can still recognize its proprietary pinch gesture even when the
+  // viewport and CSS disallow scaling. Cancel it at the document boundary.
+  document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
+  document.addEventListener("gesturechange", (event) => event.preventDefault(), { passive: false });
+  document.addEventListener("gestureend", (event) => event.preventDefault(), { passive: false });
 
   resizeCanvas();
   restoreLocal();

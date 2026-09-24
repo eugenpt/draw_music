@@ -17,6 +17,7 @@ html, body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: none;
   background: #11131a;
 }
 
@@ -33,6 +34,7 @@ button { -webkit-tap-highlight-color: transparent; }
     radial-gradient(circle at 82% 72%, rgba(180, 140, 255, 0.045), transparent 30%),
     #11131a;
   isolation: isolate;
+  touch-action: none;
 }
 
 #drawingCanvas {
