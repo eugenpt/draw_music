@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#11131a" />
+    <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
+    <title>Draw Music</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app" aria-label="Draw Music canvas instrument">
+      <canvas id="drawingCanvas" aria-label="Drawing canvas"></canvas>
+
+      <div class="brand" aria-hidden="true">
+        <span class="brand-mark">♪</span>
+        <span>draw music</span>
+      </div>
+
+      <div id="hint" class="hint" aria-live="polite">
+        <span>Draw something</span>
+        <small>Height controls pitch · color controls sound</small>
+      </div>
+
+      <section class="controls" aria-label="Drawing and playback controls">
+        <div class="primary-controls">
+          <button id="playButton" class="icon-button play-button" type="button" aria-label="Play drawing" aria-pressed="false">
+            <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z" /></svg>
+            <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" /></svg>
+          </button>
+
+          <div class="colors" role="radiogroup" aria-label="Pencil color and sound">
+            <button class="color-swatch selected" data-color="#72f1b8" data-voice="bloom" type="button" role="radio" aria-checked="true" aria-label="Mint bloom sound"></button>
+            <button class="color-swatch" data-color="#ff7b72" data-voice="pluck" type="button" role="radio" aria-checked="false" aria-label="Coral pluck sound"></button>
+            <button class="color-swatch" data-color="#b48cff" data-voice="spark" type="button" role="radio" aria-checked="false" aria-label="Purple spark sound"></button>
+            <button class="color-swatch" data-color="#ffd166" data-voice="buzz" type="button" role="radio" aria-checked="false" aria-label="Yellow buzz sound"></button>
+          </div>
+
+          <button id="eraserButton" class="icon-button tool-button" type="button" aria-label="Eraser" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.3 3.7 4 4a2 2 0 0 1 0 2.8l-8.8 8.8a2 2 0 0 1-1.4.6H6.8a2 2 0 0 1-1.4-.6l-1.7-1.7a2 2 0 0 1 0-2.8l9.8-11a2 2 0 0 1 2.8-.1ZM8.2 13.3l4.5 4.5" /></svg>
+          </button>
+
+          <button id="moreButton" class="icon-button tool-button" type="button" aria-label="More options" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          </button>
+        </div>
+
+        <div id="moreControls" class="more-controls" aria-hidden="true">
+          <label class="tempo-control" for="tempoRange">
+            <span>Sweep</span>
+            <input id="tempoRange" type="range" min="4" max="16" step="1" value="8" aria-label="Sweep duration in seconds" />
+            <output id="tempoOutput" for="tempoRange">8s</output>
+          </label>
+          <div class="action-row">
+            <button id="undoButton" class="text-button" type="button">Undo</button>
+            <button id="saveButton" class="text-button" type="button">Save JSON</button>
+            <button id="loadButton" class="text-button" type="button">Load JSON</button>
+            <button id="clearButton" class="text-button danger" type="button">Clear</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <input id="fileInput" type="file" accept="application/json,.json" hidden />
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
