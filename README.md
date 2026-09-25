@@ -9,6 +9,8 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Music-category audio sessions that remain audible through iPhone Silent mode
 - Explicit dual-channel output for centered headphone playback
 - Continuous play/pause sweep with adjustable duration
+- Polyphonic playback for every distinct playhead intersection
+- Visible black markers at all active intersections
 - Pentatonic pitch mapping from the canvas' vertical axis
 - Stroke eraser, undo, and clear
 - Automatic browser storage

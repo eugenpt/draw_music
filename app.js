@@ -303,7 +303,31 @@
         const t = Math.abs(dx) < 0.00001 ? 0.5 : clamp((normalizedX - a.x) / dx, 0, 1);
         ys.push(a.y + (b.y - a.y) * t);
       }
-      if (ys.length) hits.push({ id: stroke.id, voice: stroke.voice, y: ys.reduce((sum, y) => sum + y, 0) / ys.length });
+
+      // A single winding stroke can cross the playhead many times. Sort the
+      // crossings vertically and merge only points that are visually the same
+      // intersection (usually two adjacent segments sharing an endpoint).
+      ys.sort((a, b) => a - b);
+      const mergeDistance = 7 / state.height;
+      const clusters = [];
+      ys.forEach((y) => {
+        const cluster = clusters[clusters.length - 1];
+        if (cluster && Math.abs(y - cluster.average) <= mergeDistance) {
+          cluster.values.push(y);
+          cluster.average = cluster.values.reduce((sum, value) => sum + value, 0) / cluster.values.length;
+        } else {
+          clusters.push({ values: [y], average: y });
+        }
+      });
+
+      clusters.forEach((cluster, index) => {
+        hits.push({
+          id: `${stroke.id}:${index}`,
+          voice: stroke.voice,
+          color: stroke.color,
+          y: cluster.average,
+        });
+      });
     });
     return hits;
   }
@@ -322,16 +346,37 @@
     ctx.restore();
   }
 
+  function drawIntersections(hits) {
+    if (!hits.length) return;
+    const x = state.sweep * state.width;
+    ctx.save();
+    hits.forEach((hit) => {
+      const y = hit.y * state.height;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#050609";
+      ctx.shadowColor = "rgba(255,255,255,.5)";
+      ctx.shadowBlur = 3;
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
   function render(time) {
     const dt = Math.min((time - state.previousTime) / 1000, 0.05);
     state.previousTime = time;
+    let hits = [];
     if (state.playing) {
       state.sweep = (state.sweep + dt / state.sweepDuration) % 1;
-      audio?.update(intersectionsAt(state.sweep));
+      hits = intersectionsAt(state.sweep);
+      audio?.update(hits);
     }
     ctx.clearRect(0, 0, state.width, state.height);
     state.strokes.forEach(drawStroke);
-    if (state.playing) drawSweep();
+    if (state.playing) {
+      drawSweep();
+      drawIntersections(hits);
+    }
     requestAnimationFrame(render);
   }
 
