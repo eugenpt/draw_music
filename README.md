@@ -10,6 +10,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Optional bottom drum sequencer with 16 steps and Kick, Snare, and Hi-hat lanes
 - The drum playhead loops four times while the melodic playhead crosses the canvas once
 - Hiding the drum editor expands its pattern into four visible playback copies
+- Hidden drum copies use a compact lower preview; drum-panel erasing never reaches drawings underneath
 - Cycleable Octaves, Chord, and C-major Scale grids with musical snapping
 - Grid strokes follow neighboring horizontal, vertical, and diagonal edges
 - Tap-to-preview colors and an iOS-compatible audio unlock

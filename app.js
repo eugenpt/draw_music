@@ -83,6 +83,8 @@
   const DRUM_GRID_BOTTOM = 0.82;
   const DRUM_GRID_X_PADDING = 0.025;
   const DRUM_LANES = { hat: 0.69, snare: 0.74, kick: 0.79 };
+  const DRUM_PREVIEW_LANES = { hat: 0.75, snare: 0.775, kick: 0.8 };
+  const DRUM_PREVIEW_SIZE_SCALE = 0.72;
 
   class AudioEngine {
     constructor() {
@@ -515,6 +517,7 @@
     return Array.from({ length: DRUM_GRID_REPEATS }, (_, repeat) => ({
       ...patternPoint,
       x: (patternPoint.x + repeat) / DRUM_GRID_REPEATS,
+      y: DRUM_PREVIEW_LANES[stroke.voice] ?? DRUM_PREVIEW_LANES.snare,
     }));
   }
 
@@ -569,9 +572,14 @@
 
   function eraseAt(point) {
     const radius = 21;
+    const insideDrumGrid = state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM;
     let changed = false;
     const nextStrokes = [];
     state.strokes.forEach((stroke) => {
+      if (insideDrumGrid && !stroke.drumPattern) {
+        nextStrokes.push(stroke);
+        return;
+      }
       if (stroke.kind === "dot") {
         const touched = displayedDotPoints(stroke).some((dot) => Math.hypot(
           (point.x - dot.x) * state.width,
@@ -632,8 +640,10 @@
 
   function deleteCurveAt(point) {
     const radius = 21;
+    const insideDrumGrid = state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM;
     const before = state.strokes.length;
     state.strokes = state.strokes.filter((stroke) => {
+      if (insideDrumGrid && !stroke.drumPattern) return true;
       if (stroke.kind === "dot") {
         return !displayedDotPoints(stroke).some((dot) => Math.hypot(
           (point.x - dot.x) * state.width,
@@ -678,11 +688,11 @@
     return segments;
   }
 
-  function drawDot(stroke, normalizedPoint) {
+  function drawDot(stroke, normalizedPoint, size = stroke.size) {
     const point = canvasPoint(normalizedPoint);
     ctx.save();
     ctx.beginPath();
-    ctx.arc(point.x, point.y, stroke.size / 2, 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = stroke.color;
     ctx.shadowColor = stroke.color;
     ctx.shadowBlur = state.playing ? 9 : 5;
@@ -697,7 +707,10 @@
 
   function drawStroke(stroke) {
     if (stroke.kind === "dot") {
-      displayedDotPoints(stroke).forEach((point) => drawDot(stroke, point));
+      const size = stroke.drumPattern && !state.drumGrid
+        ? stroke.size * DRUM_PREVIEW_SIZE_SCALE
+        : stroke.size;
+      displayedDotPoints(stroke).forEach((point) => drawDot(stroke, point, size));
       return;
     }
     const segments = splineSegments(stroke);
@@ -804,7 +817,9 @@
               kind: "percussion",
               voice: stroke.voice,
               color: stroke.color,
-              y: point.y,
+              y: state.drumGrid
+                ? point.y
+                : (DRUM_PREVIEW_LANES[stroke.voice] ?? DRUM_PREVIEW_LANES.snare),
               x: state.drumGrid ? (normalizedX * DRUM_GRID_REPEATS) % 1 : normalizedX,
             });
           }
