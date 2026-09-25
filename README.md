@@ -13,6 +13,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Visible black markers at all active intersections
 - Exact quadratic-spline intersection detection matching the rendered curves
 - Click-free attack and release envelopes for polyphonic note changes
+- Persistent intersection-to-oscillator tracking across animation frames
 - Pentatonic pitch mapping from the canvas' vertical axis
 - Stroke eraser, undo, and clear
 - Automatic browser storage

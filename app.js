@@ -40,6 +40,8 @@
   let saveTimer = 0;
   let toastTimer = 0;
   let nextStrokeId = 1;
+  let nextIntersectionId = 1;
+  let intersectionTracks = new Map();
 
   const voiceSettings = {
     bloom: { wave: "sine", gain: 0.12, filter: 2600, detune: 0 },
@@ -161,8 +163,10 @@
         gain.cancelScheduledValues(now);
         gain.setValueAtTime(currentLevel, now);
       }
-      gain.linearRampToValueAtTime(0, now + 0.14);
-      voice.osc.stop(now + 0.17);
+      // Let the tail decay exponentially to near-silence before stopping the
+      // oscillator. This avoids an audible edge in Safari's audio renderer.
+      gain.setTargetAtTime(0, now, 0.065);
+      voice.osc.stop(now + 0.65);
     }
 
     silence() {
@@ -378,6 +382,7 @@
   function intersectionsAt(normalizedX) {
     const verticalTolerance = 3 / state.width;
     const hits = [];
+    const nextTracks = new Map();
     state.strokes.forEach((stroke) => {
       const ys = splineSegments(stroke).flatMap((segment) =>
         segmentIntersections(segment, normalizedX, verticalTolerance)
@@ -399,15 +404,46 @@
         }
       });
 
-      clusters.forEach((cluster, index) => {
-        hits.push({
-          id: `${stroke.id}:${index}`,
-          voice: stroke.voice,
-          color: stroke.color,
-          y: cluster.average,
+      // Preserve oscillator identity as crossings appear and disappear. Using
+      // the vertical array index directly causes every lower voice to be
+      // reassigned when a crossing above it vanishes.
+      const previousTracks = intersectionTracks.get(stroke.id) || [];
+      const tracked = clusters.map((cluster) => ({ id: null, y: cluster.average }));
+      const candidates = [];
+      previousTracks.forEach((previous, previousIndex) => {
+        tracked.forEach((current, currentIndex) => {
+          candidates.push({
+            previousIndex,
+            currentIndex,
+            distance: Math.abs(previous.y - current.y),
+          });
         });
       });
+      candidates.sort((a, b) => a.distance - b.distance);
+      const usedPrevious = new Set();
+      const usedCurrent = new Set();
+      const maximumTrackingDistance = 80 / state.height;
+      candidates.forEach((candidate) => {
+        if (candidate.distance > maximumTrackingDistance
+          || usedPrevious.has(candidate.previousIndex)
+          || usedCurrent.has(candidate.currentIndex)) return;
+        tracked[candidate.currentIndex].id = previousTracks[candidate.previousIndex].id;
+        usedPrevious.add(candidate.previousIndex);
+        usedCurrent.add(candidate.currentIndex);
+      });
+
+      tracked.forEach((track) => {
+        if (!track.id) track.id = `intersection-${nextIntersectionId++}`;
+        hits.push({
+          id: track.id,
+          voice: stroke.voice,
+          color: stroke.color,
+          y: track.y,
+        });
+      });
+      if (tracked.length) nextTracks.set(stroke.id, tracked);
     });
+    intersectionTracks = nextTracks;
     return hits;
   }
 
@@ -446,7 +482,9 @@
     state.previousTime = time;
     let hits = [];
     if (state.playing) {
+      const previousSweep = state.sweep;
       state.sweep = (state.sweep + dt / state.sweepDuration) % 1;
+      if (state.sweep < previousSweep) intersectionTracks.clear();
       hits = intersectionsAt(state.sweep);
       audio?.update(hits);
     }
@@ -478,7 +516,10 @@
     state.playing = !state.playing;
     playButton.setAttribute("aria-pressed", String(state.playing));
     playButton.setAttribute("aria-label", state.playing ? "Pause drawing" : "Play drawing");
-    if (!state.playing) audio.silence();
+    if (!state.playing) {
+      audio.silence();
+      intersectionTracks.clear();
+    }
     else if (state.strokes.length) {
       const first = state.strokes[0];
       audio.preview(first.voice, first.points[0]?.y ?? 0.5);
