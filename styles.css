@@ -212,7 +212,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .more-controls.open {
-  max-height: 150px;
+  max-height: 205px;
   opacity: 1;
   padding: 12px 14px 14px;
   border-top-color: var(--panel-border);
@@ -234,6 +234,22 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .tempo-control output { color: #f7f6f2; text-align: right; font-variant-numeric: tabular-nums; }
 input[type="range"] { width: 100%; accent-color: var(--mint); }
+
+.grid-button {
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(114,241,184,.16);
+  border-radius: 11px;
+  background: rgba(114,241,184,.07);
+  color: #dffced;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.grid-button:active { transform: scale(.985); }
 
 .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .text-button { padding: 10px 6px; border-radius: 11px; background: rgba(255,255,255,.06); font-size: 12px; font-weight: 650; white-space: nowrap; }
@@ -271,7 +287,7 @@ input[type="range"] { width: 100%; accent-color: var(--mint); }
   .color-swatch { width: 22px; height: 22px; }
   .eraser-tools .icon-button { width: 37px; height: 29px; }
   .action-row { grid-template-columns: repeat(2, 1fr); }
-  .more-controls.open { max-height: 205px; }
+  .more-controls.open { max-height: 255px; }
 }
 
 @media (max-width: 350px) {

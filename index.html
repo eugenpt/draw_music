@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=11" />
+    <link rel="stylesheet" href="styles.css?v=12" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -64,6 +64,7 @@
             <input id="tempoRange" type="range" min="4" max="16" step="1" value="8" aria-label="Sweep duration in seconds" />
             <output id="tempoOutput" for="tempoRange">8s</output>
           </label>
+          <button id="gridButton" class="grid-button" type="button" aria-label="Grid is off">Grid: Off</button>
           <div class="action-row">
             <button id="undoButton" class="text-button" type="button">Undo</button>
             <button id="saveButton" class="text-button" type="button">Save JSON</button>
@@ -76,6 +77,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
   </body>
 </html>

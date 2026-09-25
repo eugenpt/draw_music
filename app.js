@@ -8,6 +8,7 @@
   const deleteCurveButton = document.querySelector("#deleteCurveButton");
   const moreButton = document.querySelector("#moreButton");
   const moreControls = document.querySelector("#moreControls");
+  const gridButton = document.querySelector("#gridButton");
   const tempoRange = document.querySelector("#tempoRange");
   const tempoOutput = document.querySelector("#tempoOutput");
   const undoButton = document.querySelector("#undoButton");
@@ -20,7 +21,7 @@
   const swatches = [...document.querySelectorAll(".color-swatch")];
 
   const STORAGE_KEY = "draw-music-composition-v1";
-  const VERSION = 2;
+  const VERSION = 3;
   const state = {
     strokes: [],
     activeStroke: null,
@@ -34,6 +35,7 @@
     playing: false,
     sweep: 0,
     sweepDuration: 8,
+    gridMode: 0,
     previousTime: performance.now(),
     width: 1,
     height: 1,
@@ -62,6 +64,16 @@
     snare: { gain: 0.16 },
     hat: { gain: 0.1 },
   };
+
+  const C_MAJOR_MIDI = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72];
+  const GRID_TOP = 0.08;
+  const GRID_BOTTOM = 0.82;
+  const GRID_MODES = [
+    { name: "Off", beats: 0, pitchIndices: [] },
+    { name: "Octaves", beats: 4, pitchIndices: [0, 7, 14] },
+    { name: "Chord", beats: 8, pitchIndices: [0, 2, 4, 7, 9, 11, 14] },
+    { name: "Scale", beats: 16, pitchIndices: C_MAJOR_MIDI.map((_, index) => index) },
+  ];
 
   class AudioEngine {
     constructor() {
@@ -142,7 +154,7 @@
       if (voiceName === "kick") {
         const osc = this.context.createOscillator();
         const gain = this.context.createGain();
-        const baseFrequency = 42 + (1 - normalizedY) * 34;
+        const baseFrequency = 48 + (1 - normalizedY) * 16;
         osc.type = "sine";
         osc.frequency.setValueAtTime(baseFrequency * 2.8, now);
         osc.frequency.exponentialRampToValueAtTime(baseFrequency, now + 0.11);
@@ -164,7 +176,7 @@
 
       if (voiceName === "snare") {
         filter.type = "bandpass";
-        filter.frequency.value = 1300 + (1 - normalizedY) * 1400;
+        filter.frequency.value = 1600 + (1 - normalizedY) * 800;
         filter.Q.value = 0.75;
         gain.gain.linearRampToValueAtTime(settings.gain, now + 0.006);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
@@ -174,7 +186,7 @@
       }
 
       filter.type = "highpass";
-      filter.frequency.value = 5600 + (1 - normalizedY) * 2600;
+      filter.frequency.value = 6500 + (1 - normalizedY) * 1500;
       filter.Q.value = 0.8;
       gain.gain.linearRampToValueAtTime(settings.gain, now + 0.003);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
@@ -250,9 +262,9 @@
   }
 
   function yToFrequency(normalizedY) {
-    const pentatonic = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33];
-    const index = Math.round((1 - clamp(normalizedY, 0, 1)) * (pentatonic.length - 1));
-    return 110 * Math.pow(2, pentatonic[index] / 12);
+    const pitchPosition = clamp((normalizedY - GRID_TOP) / (GRID_BOTTOM - GRID_TOP), 0, 1);
+    const index = Math.round((1 - pitchPosition) * (C_MAJOR_MIDI.length - 1));
+    return 440 * Math.pow(2, (C_MAJOR_MIDI[index] - 69) / 12);
   }
 
   function frequencyForVoice(voiceName, normalizedY) {
@@ -282,16 +294,71 @@
 
   function canvasPoint(point) { return { x: point.x * state.width, y: point.y * state.height }; }
 
+  function currentGrid() { return GRID_MODES[state.gridMode]; }
+
+  function gridYForPitchIndex(index) {
+    return GRID_BOTTOM - index / (C_MAJOR_MIDI.length - 1) * (GRID_BOTTOM - GRID_TOP);
+  }
+
+  function gridNodeForPoint(point) {
+    const grid = currentGrid();
+    if (!grid.beats) return null;
+    const xIndex = clamp(Math.round(point.x * grid.beats), 0, grid.beats);
+    let rowIndex = 0;
+    let closestDistance = Infinity;
+    grid.pitchIndices.forEach((pitchIndex, index) => {
+      const distance = Math.abs(point.y - gridYForPitchIndex(pitchIndex));
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        rowIndex = index;
+      }
+    });
+    return { xIndex, rowIndex };
+  }
+
+  function pointForGridNode(node, pressure = 0.55) {
+    const grid = currentGrid();
+    return {
+      x: node.xIndex / grid.beats,
+      y: gridYForPitchIndex(grid.pitchIndices[node.rowIndex]),
+      p: pressure,
+    };
+  }
+
+  function snapPointToGrid(point) {
+    const node = gridNodeForPoint(point);
+    return node ? pointForGridNode(node, point.p) : point;
+  }
+
+  function appendGridPath(points, targetPoint) {
+    const targetNode = gridNodeForPoint(targetPoint);
+    const currentNode = gridNodeForPoint(points[points.length - 1]);
+    if (!targetNode || !currentNode) return;
+    let xIndex = currentNode.xIndex;
+    let rowIndex = currentNode.rowIndex;
+    while (xIndex !== targetNode.xIndex || rowIndex !== targetNode.rowIndex) {
+      xIndex += Math.sign(targetNode.xIndex - xIndex);
+      rowIndex += Math.sign(targetNode.rowIndex - rowIndex);
+      points.push(pointForGridNode({ xIndex, rowIndex }, targetPoint.p));
+    }
+  }
+
   function placePercussion(point) {
+    const placedPoint = state.gridMode ? snapPointToGrid(point) : point;
+    const last = state.lastPercussionPoint;
+    if (last && Math.hypot(
+      (placedPoint.x - last.x) * state.width,
+      (placedPoint.y - last.y) * state.height
+    ) < 0.5) return;
     state.strokes.push({
       id: nextStrokeId++,
       kind: "dot",
       color: state.color,
       voice: state.voice,
       size: 16,
-      points: [point],
+      points: [placedPoint],
     });
-    state.lastPercussionPoint = point;
+    state.lastPercussionPoint = placedPoint;
     updateEmptyState();
   }
 
@@ -313,13 +380,15 @@
       placePercussion(point);
       return;
     }
+    const drawingPoint = state.gridMode ? snapPointToGrid(point) : point;
     state.activeStroke = {
       id: nextStrokeId++,
       kind: "line",
+      geometry: state.gridMode ? "grid" : "spline",
       color: state.color,
       voice: state.voice,
       size: 5.5,
-      points: [point],
+      points: [drawingPoint],
     };
     state.strokes.push(state.activeStroke);
     updateEmptyState();
@@ -338,14 +407,19 @@
     }
     if (state.instrumentKind === "percussion") {
       const last = state.lastPercussionPoint;
+      const candidate = state.gridMode ? snapPointToGrid(point) : point;
       const distance = last
-        ? Math.hypot((point.x - last.x) * state.width, (point.y - last.y) * state.height)
+        ? Math.hypot((candidate.x - last.x) * state.width, (candidate.y - last.y) * state.height)
         : Infinity;
-      if (distance >= 26) placePercussion(point);
+      if (state.gridMode ? distance >= 0.5 : distance >= 26) placePercussion(point);
       return;
     }
     const points = state.activeStroke?.points;
     if (!points) return;
+    if (state.gridMode) {
+      appendGridPath(points, point);
+      return;
+    }
     const last = points[points.length - 1];
     const dx = (point.x - last.x) * state.width;
     const dy = (point.y - last.y) * state.height;
@@ -521,6 +595,13 @@
   function splineSegments(stroke) {
     const points = stroke.points;
     if (points.length < 2) return [];
+    if (stroke.geometry === "grid") {
+      return points.slice(1).map((end, index) => ({
+        type: "line",
+        start: points[index],
+        end,
+      }));
+    }
     if (points.length === 2) return [{ type: "line", start: points[0], end: points[1] }];
 
     const segments = [];
@@ -717,6 +798,34 @@
     return hits;
   }
 
+  function drawGrid() {
+    const grid = currentGrid();
+    if (!grid.beats) return;
+    ctx.save();
+    ctx.lineWidth = 1;
+
+    for (let beat = 0; beat <= grid.beats; beat++) {
+      const x = beat / grid.beats * state.width;
+      const isMajorBeat = beat % Math.max(1, grid.beats / 4) === 0;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, state.height);
+      ctx.strokeStyle = isMajorBeat ? "rgba(114,241,184,.16)" : "rgba(255,255,255,.065)";
+      ctx.stroke();
+    }
+
+    grid.pitchIndices.forEach((pitchIndex) => {
+      const y = gridYForPitchIndex(pitchIndex) * state.height;
+      const isOctave = pitchIndex === 0 || pitchIndex === 7 || pitchIndex === 14;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(state.width, y);
+      ctx.strokeStyle = isOctave ? "rgba(180,140,255,.18)" : "rgba(255,255,255,.07)";
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   function drawSweep() {
     const x = state.sweep * state.width;
     const gradient = ctx.createLinearGradient(x, 0, x + 18, 0);
@@ -759,6 +868,7 @@
       audio?.update(hits);
     }
     ctx.clearRect(0, 0, state.width, state.height);
+    drawGrid();
     state.strokes.forEach(drawStroke);
     if (state.playing) {
       drawSweep();
@@ -847,6 +957,22 @@
     moreButton.setAttribute("aria-expanded", String(open));
   }
 
+  function updateGridButton() {
+    const grid = currentGrid();
+    gridButton.textContent = `Grid: ${grid.name}`;
+    gridButton.setAttribute("aria-label", grid.beats
+      ? `${grid.name} grid with ${grid.beats} time divisions`
+      : "Grid is off");
+  }
+
+  function cycleGrid() {
+    state.gridMode = (state.gridMode + 1) % GRID_MODES.length;
+    updateGridButton();
+    scheduleSave();
+    const grid = currentGrid();
+    showToast(grid.beats ? `${grid.name}: ${grid.beats} beats` : "Grid off");
+  }
+
   function updateEmptyState() {
     const empty = state.strokes.length === 0;
     hint.classList.toggle("hidden", !empty);
@@ -854,7 +980,13 @@
   }
 
   function compositionData() {
-    return { version: VERSION, name: "My Draw Music composition", sweepDuration: state.sweepDuration, strokes: state.strokes };
+    return {
+      version: VERSION,
+      name: "My Draw Music composition",
+      sweepDuration: state.sweepDuration,
+      gridMode: state.gridMode,
+      strokes: state.strokes,
+    };
   }
 
   function scheduleSave() {
@@ -874,6 +1006,7 @@
       return {
         id: nextStrokeId++,
         kind: isDot ? "dot" : "line",
+        geometry: stroke.geometry === "grid" ? "grid" : "spline",
         color: stroke.color,
         voice: isDot
           ? (percussionSettings[stroke.voice] ? stroke.voice : "kick")
@@ -883,8 +1016,10 @@
       };
     }).filter((stroke) => stroke.points.length >= (stroke.kind === "dot" ? 1 : 2));
     state.sweepDuration = clamp(Number(data.sweepDuration) || 8, 4, 16);
+    state.gridMode = clamp(Math.round(Number(data.gridMode) || 0), 0, GRID_MODES.length - 1);
     tempoRange.value = String(state.sweepDuration);
     tempoOutput.value = `${state.sweepDuration}s`;
+    updateGridButton();
     updateEmptyState();
     scheduleSave();
     if (notify) showToast("Composition loaded");
@@ -923,6 +1058,7 @@
   eraserButton.addEventListener("click", toggleEraser);
   deleteCurveButton.addEventListener("click", toggleDeleteCurve);
   moreButton.addEventListener("click", toggleMore);
+  gridButton.addEventListener("click", cycleGrid);
   swatches.forEach((button) => button.addEventListener("click", () => chooseColor(button)));
   tempoRange.addEventListener("input", () => {
     state.sweepDuration = Number(tempoRange.value);
@@ -969,6 +1105,7 @@
 
   resizeCanvas();
   restoreLocal();
+  updateGridButton();
   updateEmptyState();
   requestAnimationFrame(render);
 })();

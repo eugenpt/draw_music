@@ -7,6 +7,8 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Pressure-aware freehand drawing with seven melodic color/sound voices
 - Dot-based Kick, Snare, and Hi-hat percussion instruments
 - Tap for one beat or drag to paint an evenly spaced percussion sequence
+- Cycleable Octaves, Chord, and C-major Scale grids with musical snapping
+- Grid strokes follow neighboring horizontal, vertical, and diagonal edges
 - Tap-to-preview colors and an iOS-compatible audio unlock
 - Music-category audio sessions that remain audible through iPhone Silent mode
 - Explicit dual-channel output for centered headphone playback
@@ -18,7 +20,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Persistent intersection-to-oscillator tracking across animation frames
 - Three extended-register instruments: Tide, Reed, and Glass
 - Compact two-row instrument palette for mobile screens
-- Pentatonic pitch mapping from the canvas' vertical axis
+- Two-octave C-major pitch mapping from the canvas' vertical axis
 - Paint-style partial eraser plus a separate whole-curve delete tool
 - Undo and clear controls
 - Automatic browser storage
