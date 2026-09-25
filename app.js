@@ -20,13 +20,15 @@
   const swatches = [...document.querySelectorAll(".color-swatch")];
 
   const STORAGE_KEY = "draw-music-composition-v1";
-  const VERSION = 1;
+  const VERSION = 2;
   const state = {
     strokes: [],
     activeStroke: null,
     drawing: false,
     erasing: false,
     deletingCurve: false,
+    instrumentKind: "line",
+    lastPercussionPoint: null,
     color: "#72f1b8",
     voice: "bloom",
     playing: false,
@@ -55,6 +57,12 @@
     glass: { wave: "sine", gain: 0.085, filter: 4600, detune: 6, transpose: 12 },
   };
 
+  const percussionSettings = {
+    kick: { gain: 0.28 },
+    snare: { gain: 0.16 },
+    hat: { gain: 0.1 },
+  };
+
   class AudioEngine {
     constructor() {
       this.requestPlaybackSession();
@@ -70,6 +78,10 @@
       this.master.connect(this.stereo, 0, 1);
       this.stereo.connect(this.context.destination);
       this.voices = new Map();
+      this.activePercussion = new Set();
+      this.noiseBuffer = this.context.createBuffer(1, this.context.sampleRate, this.context.sampleRate);
+      const noise = this.noiseBuffer.getChannelData(0);
+      for (let i = 0; i < noise.length; i++) noise[i] = Math.random() * 2 - 1;
     }
 
     requestPlaybackSession(refresh = false) {
@@ -122,11 +134,67 @@
       osc.stop(now + 0.26);
     }
 
+    triggerPercussion(voiceName, normalizedY = 0.5) {
+      const settings = percussionSettings[voiceName];
+      if (!settings) return;
+      const now = this.context.currentTime;
+
+      if (voiceName === "kick") {
+        const osc = this.context.createOscillator();
+        const gain = this.context.createGain();
+        const baseFrequency = 42 + (1 - normalizedY) * 34;
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(baseFrequency * 2.8, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFrequency, now + 0.11);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(settings.gain, now + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+        osc.connect(gain).connect(this.master);
+        osc.start(now);
+        osc.stop(now + 0.42);
+        return;
+      }
+
+      const source = this.context.createBufferSource();
+      const filter = this.context.createBiquadFilter();
+      const gain = this.context.createGain();
+      source.buffer = this.noiseBuffer;
+      source.playbackRate.value = 0.9 + (1 - normalizedY) * 0.35;
+      gain.gain.setValueAtTime(0, now);
+
+      if (voiceName === "snare") {
+        filter.type = "bandpass";
+        filter.frequency.value = 1300 + (1 - normalizedY) * 1400;
+        filter.Q.value = 0.75;
+        gain.gain.linearRampToValueAtTime(settings.gain, now + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+        source.connect(filter).connect(gain).connect(this.master);
+        source.start(now, Math.random() * 0.65, 0.24);
+        return;
+      }
+
+      filter.type = "highpass";
+      filter.frequency.value = 5600 + (1 - normalizedY) * 2600;
+      filter.Q.value = 0.8;
+      gain.gain.linearRampToValueAtTime(settings.gain, now + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+      source.connect(filter).connect(gain).connect(this.master);
+      source.start(now, Math.random() * 0.8, 0.09);
+    }
+
     update(hits) {
       const now = this.context.currentTime;
-      const liveIds = new Set(hits.map((hit) => hit.id));
+      const percussionHits = hits.filter((hit) => hit.kind === "percussion");
+      const nextPercussion = new Set(percussionHits.map((hit) => hit.id));
+      percussionHits.forEach((hit) => {
+        if (!this.activePercussion.has(hit.id)) this.triggerPercussion(hit.voice, hit.y);
+      });
+      this.activePercussion = nextPercussion;
 
-      hits.forEach((hit) => {
+      const tonalHits = hits.filter((hit) => hit.kind !== "percussion");
+      const liveIds = new Set(tonalHits.map((hit) => hit.id));
+
+      tonalHits.forEach((hit) => {
         const frequency = frequencyForVoice(hit.voice, hit.y);
         const existing = this.voices.get(hit.id);
         if (existing) {
@@ -177,6 +245,7 @@
     silence() {
       const now = this.context.currentTime;
       this.voices.forEach((voice, id) => this.release(id, voice, now));
+      this.activePercussion.clear();
     }
   }
 
@@ -213,6 +282,19 @@
 
   function canvasPoint(point) { return { x: point.x * state.width, y: point.y * state.height }; }
 
+  function placePercussion(point) {
+    state.strokes.push({
+      id: nextStrokeId++,
+      kind: "dot",
+      color: state.color,
+      voice: state.voice,
+      size: 16,
+      points: [point],
+    });
+    state.lastPercussionPoint = point;
+    updateEmptyState();
+  }
+
   function onPointerDown(event) {
     if (event.button !== undefined && event.button !== 0) return;
     canvas.setPointerCapture(event.pointerId);
@@ -226,8 +308,14 @@
       deleteCurveAt(point);
       return;
     }
+    if (state.instrumentKind === "percussion") {
+      state.activeStroke = null;
+      placePercussion(point);
+      return;
+    }
     state.activeStroke = {
       id: nextStrokeId++,
+      kind: "line",
       color: state.color,
       voice: state.voice,
       size: 5.5,
@@ -248,6 +336,14 @@
       deleteCurveAt(point);
       return;
     }
+    if (state.instrumentKind === "percussion") {
+      const last = state.lastPercussionPoint;
+      const distance = last
+        ? Math.hypot((point.x - last.x) * state.width, (point.y - last.y) * state.height)
+        : Infinity;
+      if (distance >= 26) placePercussion(point);
+      return;
+    }
     const points = state.activeStroke?.points;
     if (!points) return;
     const last = points[points.length - 1];
@@ -260,11 +356,12 @@
     if (!state.drawing) return;
     state.drawing = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    if (state.activeStroke?.points.length === 1) {
+    if (state.instrumentKind === "line" && state.activeStroke?.points.length === 1) {
       const first = state.activeStroke.points[0];
       state.activeStroke.points.push({ ...first, x: first.x + 0.0001 });
     }
     state.activeStroke = null;
+    state.lastPercussionPoint = null;
     scheduleSave();
   }
 
@@ -340,6 +437,16 @@
     let changed = false;
     const nextStrokes = [];
     state.strokes.forEach((stroke) => {
+      if (stroke.kind === "dot") {
+        const dot = stroke.points[0];
+        const distance = Math.hypot(
+          (point.x - dot.x) * state.width,
+          (point.y - dot.y) * state.height
+        );
+        if (distance <= radius + stroke.size / 2) changed = true;
+        else nextStrokes.push(stroke);
+        return;
+      }
       let touched = false;
       const fragments = [];
       let fragment = [];
@@ -393,6 +500,13 @@
     const radius = 21;
     const before = state.strokes.length;
     state.strokes = state.strokes.filter((stroke) => {
+      if (stroke.kind === "dot") {
+        const dot = stroke.points[0];
+        return Math.hypot(
+          (point.x - dot.x) * state.width,
+          (point.y - dot.y) * state.height
+        ) > radius + stroke.size / 2;
+      }
       for (let i = 1; i < stroke.points.length; i++) {
         if (distanceToSegment(point, stroke.points[i - 1], stroke.points[i]) <= radius) return false;
       }
@@ -425,6 +539,23 @@
   }
 
   function drawStroke(stroke) {
+    if (stroke.kind === "dot") {
+      const point = canvasPoint(stroke.points[0]);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, stroke.size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = stroke.color;
+      ctx.shadowColor = stroke.color;
+      ctx.shadowBlur = state.playing ? 9 : 5;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(point.x - 2, point.y - 2, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,.65)";
+      ctx.shadowBlur = 0;
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
     const segments = splineSegments(stroke);
     if (!segments.length) return;
     const first = canvasPoint(segments[0].start);
@@ -509,6 +640,20 @@
     const hits = [];
     const nextTracks = new Map();
     state.strokes.forEach((stroke) => {
+      if (stroke.kind === "dot") {
+        const point = stroke.points[0];
+        const hitRadius = (stroke.size / 2 + 2) / state.width;
+        if (Math.abs(normalizedX - point.x) <= hitRadius) {
+          hits.push({
+            id: `percussion-${stroke.id}`,
+            kind: "percussion",
+            voice: stroke.voice,
+            color: stroke.color,
+            y: point.y,
+          });
+        }
+        return;
+      }
       const ys = splineSegments(stroke).flatMap((segment) =>
         segmentIntersections(segment, normalizedX, verticalTolerance)
       );
@@ -647,7 +792,8 @@
     }
     else if (state.strokes.length) {
       const first = state.strokes[0];
-      audio.preview(first.voice, first.points[0]?.y ?? 0.5);
+      if (first.kind === "dot") audio.triggerPercussion(first.voice, first.points[0]?.y ?? 0.5);
+      else audio.preview(first.voice, first.points[0]?.y ?? 0.5);
     }
     showToast(state.playing ? "Playing your drawing" : "Paused");
   }
@@ -655,6 +801,7 @@
   function chooseColor(button) {
     state.color = button.dataset.color;
     state.voice = button.dataset.voice;
+    state.instrumentKind = button.dataset.kind || "line";
     state.erasing = false;
     state.deletingCurve = false;
     eraserButton.setAttribute("aria-pressed", "false");
@@ -670,7 +817,10 @@
     // with which to unlock Web Audio.
     if (window.AudioContext || window.webkitAudioContext) {
       if (!audio) audio = new AudioEngine();
-      audio.unlock().then(() => audio.preview(state.voice)).catch(() => {});
+      audio.unlock().then(() => {
+        if (state.instrumentKind === "percussion") audio.triggerPercussion(state.voice);
+        else audio.preview(state.voice);
+      }).catch(() => {});
     }
   }
 
@@ -719,13 +869,19 @@
     const validStrokes = data.strokes.filter((stroke) =>
       typeof stroke.color === "string" && typeof stroke.voice === "string" && Array.isArray(stroke.points)
     );
-    state.strokes = validStrokes.map((stroke) => ({
-      id: nextStrokeId++,
-      color: stroke.color,
-      voice: voiceSettings[stroke.voice] ? stroke.voice : "bloom",
-      size: Number(stroke.size) || 5.5,
-      points: stroke.points.map((point) => ({ x: clamp(Number(point.x), 0, 1), y: clamp(Number(point.y), 0, 1), p: clamp(Number(point.p) || .55, .1, 1) })),
-    })).filter((stroke) => stroke.points.length >= 2);
+    state.strokes = validStrokes.map((stroke) => {
+      const isDot = stroke.kind === "dot" || Boolean(percussionSettings[stroke.voice]);
+      return {
+        id: nextStrokeId++,
+        kind: isDot ? "dot" : "line",
+        color: stroke.color,
+        voice: isDot
+          ? (percussionSettings[stroke.voice] ? stroke.voice : "kick")
+          : (voiceSettings[stroke.voice] ? stroke.voice : "bloom"),
+        size: Number(stroke.size) || (isDot ? 16 : 5.5),
+        points: stroke.points.map((point) => ({ x: clamp(Number(point.x), 0, 1), y: clamp(Number(point.y), 0, 1), p: clamp(Number(point.p) || .55, .1, 1) })),
+      };
+    }).filter((stroke) => stroke.points.length >= (stroke.kind === "dot" ? 1 : 2));
     state.sweepDuration = clamp(Number(data.sweepDuration) || 8, 4, 16);
     tempoRange.value = String(state.sweepDuration);
     tempoOutput.value = `${state.sweepDuration}s`;

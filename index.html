@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -31,7 +31,7 @@
             <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" /></svg>
           </button>
 
-          <div class="colors" role="radiogroup" aria-label="Pencil color and sound">
+          <div class="colors" role="radiogroup" aria-label="Drawing and percussion instruments">
             <button class="color-swatch selected" data-color="#72f1b8" data-voice="bloom" type="button" role="radio" aria-checked="true" aria-label="Mint bloom sound"></button>
             <button class="color-swatch" data-color="#ff7b72" data-voice="pluck" type="button" role="radio" aria-checked="false" aria-label="Coral pluck sound"></button>
             <button class="color-swatch" data-color="#b48cff" data-voice="spark" type="button" role="radio" aria-checked="false" aria-label="Purple spark sound"></button>
@@ -39,6 +39,9 @@
             <button class="color-swatch" data-color="#57c7ff" data-voice="tide" type="button" role="radio" aria-checked="false" aria-label="Blue tide sound"></button>
             <button class="color-swatch" data-color="#ff9f43" data-voice="reed" type="button" role="radio" aria-checked="false" aria-label="Orange reed sound"></button>
             <button class="color-swatch" data-color="#f8a5ff" data-voice="glass" type="button" role="radio" aria-checked="false" aria-label="Pink glass sound"></button>
+            <button class="color-swatch percussion-swatch" data-color="#5ee173" data-voice="kick" data-kind="percussion" type="button" role="radio" aria-checked="false" aria-label="Green kick drum dots"></button>
+            <button class="color-swatch percussion-swatch" data-color="#ff4d8d" data-voice="snare" data-kind="percussion" type="button" role="radio" aria-checked="false" aria-label="Pink snare drum dots"></button>
+            <button class="color-swatch percussion-swatch" data-color="#e8edf4" data-voice="hat" data-kind="percussion" type="button" role="radio" aria-checked="false" aria-label="White hi-hat dots"></button>
           </div>
 
           <div class="eraser-tools" aria-label="Eraser tools">
@@ -73,6 +76,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
   </body>
 </html>

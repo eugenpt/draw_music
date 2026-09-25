@@ -147,7 +147,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .colors {
   flex: 0 1 auto;
   display: grid;
-  grid-template-columns: repeat(4, 27px);
+  grid-template-columns: repeat(5, 27px);
   align-items: center;
   justify-content: center;
   gap: 7px clamp(7px, 1.8vw, 11px);
@@ -170,7 +170,22 @@ button { -webkit-tap-highlight-color: transparent; }
 .color-swatch[data-color="#57c7ff"] { --swatch: #57c7ff; }
 .color-swatch[data-color="#ff9f43"] { --swatch: #ff9f43; }
 .color-swatch[data-color="#f8a5ff"] { --swatch: #f8a5ff; }
+.color-swatch[data-color="#5ee173"] { --swatch: #5ee173; }
+.color-swatch[data-color="#ff4d8d"] { --swatch: #ff4d8d; }
+.color-swatch[data-color="#e8edf4"] { --swatch: #e8edf4; }
 .color-swatch.selected { box-shadow: 0 0 0 3px #20232e, 0 0 0 5px var(--swatch), 0 5px 18px color-mix(in srgb, var(--swatch) 45%, transparent); transform: scale(.88); }
+
+.percussion-swatch::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #12141b;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.3);
+}
 
 .eraser-tools {
   flex: 0 0 auto;
@@ -252,7 +267,7 @@ input[type="range"] { width: 100%; accent-color: var(--mint); }
 @media (max-width: 390px) {
   .primary-controls { gap: 5px; padding-inline: 8px; }
   .icon-button { width: 43px; height: 43px; border-radius: 14px; }
-  .colors { grid-template-columns: repeat(4, 22px); gap: 6px; }
+  .colors { grid-template-columns: repeat(5, 22px); gap: 6px; }
   .color-swatch { width: 22px; height: 22px; }
   .eraser-tools .icon-button { width: 37px; height: 29px; }
   .action-row { grid-template-columns: repeat(2, 1fr); }
@@ -263,7 +278,7 @@ input[type="range"] { width: 100%; accent-color: var(--mint); }
   .controls { width: calc(100vw - 10px); }
   .primary-controls { gap: 4px; padding-inline: 6px; }
   .icon-button { width: 39px; height: 43px; }
-  .colors { grid-template-columns: repeat(4, 19px); gap: 5px; }
+  .colors { grid-template-columns: repeat(5, 19px); gap: 5px; }
   .color-swatch { width: 19px; height: 19px; }
   .eraser-tools .icon-button { width: 34px; height: 27px; }
 }

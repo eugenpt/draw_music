@@ -4,7 +4,9 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 
 ## Features
 
-- Pressure-aware freehand drawing with seven color/sound voices
+- Pressure-aware freehand drawing with seven melodic color/sound voices
+- Dot-based Kick, Snare, and Hi-hat percussion instruments
+- Tap for one beat or drag to paint an evenly spaced percussion sequence
 - Tap-to-preview colors and an iOS-compatible audio unlock
 - Music-category audio sessions that remain audible through iPhone Silent mode
 - Explicit dual-channel output for centered headphone playback
