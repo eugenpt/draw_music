@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=16" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -53,7 +53,7 @@
             </button>
           </div>
 
-          <button id="drumGridButton" class="icon-button grid-tool" type="button" aria-label="Drum grid is off" aria-pressed="false">
+          <button id="drumGridButton" class="icon-button grid-tool" type="button" aria-label="Drum grid hidden; patterns still repeat four times" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M4 15h16M8 5v14M12 5v14M16 5v14" /></svg>
             <span id="drumGridModeLabel">Drum</span>
           </button>
@@ -84,6 +84,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=16"></script>
   </body>
 </html>

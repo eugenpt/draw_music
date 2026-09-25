@@ -23,7 +23,7 @@
   const swatches = [...document.querySelectorAll(".color-swatch")];
 
   const STORAGE_KEY = "draw-music-composition-v1";
-  const VERSION = 5;
+  const VERSION = 6;
   const state = {
     strokes: [],
     activeStroke: null,
@@ -81,6 +81,7 @@
   const DRUM_GRID_REPEATS = 4;
   const DRUM_GRID_TOP = 0.66;
   const DRUM_GRID_BOTTOM = 0.82;
+  const DRUM_GRID_X_PADDING = 0.025;
   const DRUM_LANES = { hat: 0.69, snare: 0.74, kick: 0.79 };
 
   class AudioEngine {
@@ -338,20 +339,35 @@
     return node ? pointForGridNode(node, point.p) : point;
   }
 
+  function drumGridXForStep(step) {
+    const usableWidth = 1 - DRUM_GRID_X_PADDING * 2;
+    return DRUM_GRID_X_PADDING + step / (DRUM_GRID_STEPS - 1) * usableWidth;
+  }
+
+  function drumStepForX(normalizedX) {
+    const usableWidth = 1 - DRUM_GRID_X_PADDING * 2;
+    const position = clamp((normalizedX - DRUM_GRID_X_PADDING) / usableWidth, 0, 1);
+    return clamp(Math.round(position * (DRUM_GRID_STEPS - 1)), 0, DRUM_GRID_STEPS - 1);
+  }
+
   function percussionPlacement(point, voiceName = state.voice) {
     if (state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM) {
-      const step = clamp(Math.floor(point.x * DRUM_GRID_STEPS), 0, DRUM_GRID_STEPS - 1);
+      const step = drumStepForX(point.x);
       return {
         inDrumGrid: true,
+        drumPattern: true,
+        drumStep: step,
         point: {
           ...point,
-          x: (step + 0.5) / DRUM_GRID_STEPS,
+          x: drumGridXForStep(step),
           y: DRUM_LANES[voiceName] ?? DRUM_LANES.snare,
         },
       };
     }
     return {
       inDrumGrid: false,
+      drumPattern: false,
+      drumStep: null,
       point: state.gridMode ? snapPointToGrid(point) : point,
     };
   }
@@ -383,6 +399,8 @@
       color: state.color,
       voice: state.voice,
       size: 16,
+      drumPattern: placement.drumPattern,
+      drumStep: placement.drumStep,
       points: [placedPoint],
     });
     state.lastPercussionPoint = placedPoint;
@@ -489,6 +507,21 @@
     };
   }
 
+  function drumPatternPoints(stroke) {
+    const stored = stroke.points[0];
+    const step = Number.isInteger(stroke.drumStep) ? stroke.drumStep : drumStepForX(stored.x);
+    const patternPoint = { ...stored, x: drumGridXForStep(step) };
+    if (state.drumGrid) return [patternPoint];
+    return Array.from({ length: DRUM_GRID_REPEATS }, (_, repeat) => ({
+      ...patternPoint,
+      x: (patternPoint.x + repeat) / DRUM_GRID_REPEATS,
+    }));
+  }
+
+  function displayedDotPoints(stroke) {
+    return stroke.drumPattern ? drumPatternPoints(stroke) : stroke.points;
+  }
+
   function segmentOutsideEraser(point, a, b, radius) {
     const centerX = point.x * state.width;
     const centerY = point.y * state.height;
@@ -540,12 +573,11 @@
     const nextStrokes = [];
     state.strokes.forEach((stroke) => {
       if (stroke.kind === "dot") {
-        const dot = stroke.points[0];
-        const distance = Math.hypot(
+        const touched = displayedDotPoints(stroke).some((dot) => Math.hypot(
           (point.x - dot.x) * state.width,
           (point.y - dot.y) * state.height
-        );
-        if (distance <= radius + stroke.size / 2) changed = true;
+        ) <= radius + stroke.size / 2);
+        if (touched) changed = true;
         else nextStrokes.push(stroke);
         return;
       }
@@ -603,11 +635,10 @@
     const before = state.strokes.length;
     state.strokes = state.strokes.filter((stroke) => {
       if (stroke.kind === "dot") {
-        const dot = stroke.points[0];
-        return Math.hypot(
+        return !displayedDotPoints(stroke).some((dot) => Math.hypot(
           (point.x - dot.x) * state.width,
           (point.y - dot.y) * state.height
-        ) > radius + stroke.size / 2;
+        ) <= radius + stroke.size / 2);
       }
       for (let i = 1; i < stroke.points.length; i++) {
         if (distanceToSegment(point, stroke.points[i - 1], stroke.points[i]) <= radius) return false;
@@ -647,22 +678,26 @@
     return segments;
   }
 
+  function drawDot(stroke, normalizedPoint) {
+    const point = canvasPoint(normalizedPoint);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, stroke.size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = stroke.color;
+    ctx.shadowColor = stroke.color;
+    ctx.shadowBlur = state.playing ? 9 : 5;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(point.x - 2, point.y - 2, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,.65)";
+    ctx.shadowBlur = 0;
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawStroke(stroke) {
     if (stroke.kind === "dot") {
-      const point = canvasPoint(stroke.points[0]);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, stroke.size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = stroke.color;
-      ctx.shadowColor = stroke.color;
-      ctx.shadowBlur = state.playing ? 9 : 5;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(point.x - 2, point.y - 2, 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,.65)";
-      ctx.shadowBlur = 0;
-      ctx.fill();
-      ctx.restore();
+      displayedDotPoints(stroke).forEach((point) => drawDot(stroke, point));
       return;
     }
     const segments = splineSegments(stroke);
@@ -761,19 +796,21 @@
     state.strokes.forEach((stroke) => {
       if (stroke.kind === "dot") {
         const point = stroke.points[0];
-        if (state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM) {
-          if (repeatedSweepCrossed(point.x, previousSweep, normalizedX, DRUM_GRID_REPEATS)) {
+        if (stroke.drumPattern) {
+          const patternX = drumGridXForStep(stroke.drumStep ?? drumStepForX(point.x));
+          if (repeatedSweepCrossed(patternX, previousSweep, normalizedX, DRUM_GRID_REPEATS)) {
             hits.push({
               id: `percussion-${stroke.id}`,
               kind: "percussion",
               voice: stroke.voice,
               color: stroke.color,
               y: point.y,
-              x: (normalizedX * DRUM_GRID_REPEATS) % 1,
+              x: state.drumGrid ? (normalizedX * DRUM_GRID_REPEATS) % 1 : normalizedX,
             });
           }
           return;
         }
+        if (state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM) return;
         const hitRadius = (stroke.size / 2 + 2) / state.width;
         if (Math.abs(normalizedX - point.x) <= hitRadius) {
           hits.push({
@@ -786,9 +823,12 @@
         }
         return;
       }
-      const ys = splineSegments(stroke).flatMap((segment) =>
+      let ys = splineSegments(stroke).flatMap((segment) =>
         segmentIntersections(segment, normalizedX, verticalTolerance)
       );
+      if (state.drumGrid) {
+        ys = ys.filter((y) => y < DRUM_GRID_TOP || y > DRUM_GRID_BOTTOM);
+      }
 
       // A single winding stroke can cross the playhead many times. Sort the
       // crossings vertically and merge only points that are visually the same
@@ -882,11 +922,20 @@
     const top = DRUM_GRID_TOP * state.height;
     const bottom = DRUM_GRID_BOTTOM * state.height;
     ctx.save();
-    ctx.fillStyle = "rgba(8,10,15,.42)";
+    ctx.fillStyle = "#0b0e15";
     ctx.fillRect(0, top, state.width, bottom - top);
 
-    for (let step = 0; step <= DRUM_GRID_STEPS; step++) {
-      const x = step / DRUM_GRID_STEPS * state.width;
+    ctx.beginPath();
+    ctx.moveTo(0, top);
+    ctx.lineTo(state.width, top);
+    ctx.moveTo(0, bottom);
+    ctx.lineTo(state.width, bottom);
+    ctx.strokeStyle = "rgba(255,255,255,.14)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    for (let step = 0; step < DRUM_GRID_STEPS; step++) {
+      const x = drumGridXForStep(step) * state.width;
       const isQuarter = step % 4 === 0;
       ctx.beginPath();
       ctx.moveTo(x, top);
@@ -967,8 +1016,9 @@
     }
     ctx.clearRect(0, 0, state.width, state.height);
     drawGrid();
+    state.strokes.filter((stroke) => !stroke.drumPattern).forEach(drawStroke);
     drawDrumGrid();
-    state.strokes.forEach(drawStroke);
+    state.strokes.filter((stroke) => stroke.drumPattern).forEach(drawStroke);
     if (state.playing) {
       drawSweep();
       drawIntersections(hits);
@@ -1078,14 +1128,14 @@
     drumGridButton.setAttribute("aria-pressed", String(state.drumGrid));
     drumGridButton.setAttribute("aria-label", state.drumGrid
       ? "Drum grid on: 16 steps repeated four times"
-      : "Drum grid is off");
+      : "Drum grid hidden; patterns still repeat four times");
   }
 
   function toggleDrumGrid() {
     state.drumGrid = !state.drumGrid;
     updateDrumGridButton();
     scheduleSave();
-    showToast(state.drumGrid ? "Drum loop: 16 steps × 4" : "Drum grid off");
+    showToast(state.drumGrid ? "Drum loop editor: 16 steps × 4" : "Grid hidden · drum loop still plays");
   }
 
   function updateEmptyState() {
@@ -1114,6 +1164,7 @@
 
   function loadComposition(data, notify = true) {
     if (!data || !Array.isArray(data.strokes)) throw new Error("Not a Draw Music file");
+    const sourceVersion = Number(data.version) || 0;
     const validStrokes = data.strokes.filter((stroke) =>
       typeof stroke.color === "string" && typeof stroke.voice === "string" && Array.isArray(stroke.points)
     );
@@ -1127,6 +1178,23 @@
         y: clamp(Number(point.y), 0, 1),
         p: clamp(Number(point.p) || .55, .1, 1),
       }));
+      const firstPoint = points[0];
+      const legacyStep = firstPoint ? firstPoint.x * DRUM_GRID_STEPS - 0.5 : -1;
+      const legacyPattern = sourceVersion === 5 && isDot && firstPoint
+        && Math.abs(firstPoint.y - (DRUM_LANES[voice] ?? -1)) < 1e-4
+        && Math.abs(legacyStep - Math.round(legacyStep)) < 1e-4;
+      const drumPattern = isDot && (stroke.drumPattern === true || legacyPattern);
+      let drumStep = null;
+      if (drumPattern && firstPoint) {
+        const storedStep = Number(stroke.drumStep);
+        drumStep = Number.isFinite(storedStep)
+          ? clamp(Math.round(storedStep), 0, DRUM_GRID_STEPS - 1)
+          : (legacyPattern
+            ? clamp(Math.round(legacyStep), 0, DRUM_GRID_STEPS - 1)
+            : drumStepForX(firstPoint.x));
+        firstPoint.x = drumGridXForStep(drumStep);
+        firstPoint.y = DRUM_LANES[voice] ?? DRUM_LANES.snare;
+      }
       return {
         id: nextStrokeId++,
         kind: isDot ? "dot" : "line",
@@ -1134,12 +1202,13 @@
         color: stroke.color,
         voice,
         size: Number(stroke.size) || (isDot ? 16 : 5.5),
+        drumPattern,
+        drumStep,
         points,
       };
     }).filter((stroke) => stroke.points.length >= (stroke.kind === "dot" ? 1 : 2));
     state.sweepDuration = clamp(Number(data.sweepDuration) || 8, 4, 16);
     let savedGridMode = Math.round(Number(data.gridMode) || 0);
-    const sourceVersion = Number(data.version) || 0;
     state.drumGrid = Boolean(data.drumGrid);
     if (sourceVersion === 4) {
       if (savedGridMode === 1) {
