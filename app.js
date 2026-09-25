@@ -9,7 +9,7 @@
   const moreButton = document.querySelector("#moreButton");
   const moreControls = document.querySelector("#moreControls");
   const gridButton = document.querySelector("#gridButton");
-  const gridModeLabel = document.querySelector("#gridModeLabel");
+  const drumGridButton = document.querySelector("#drumGridButton");
   const tempoRange = document.querySelector("#tempoRange");
   const tempoOutput = document.querySelector("#tempoOutput");
   const undoButton = document.querySelector("#undoButton");
@@ -22,7 +22,7 @@
   const swatches = [...document.querySelectorAll(".color-swatch")];
 
   const STORAGE_KEY = "draw-music-composition-v1";
-  const VERSION = 4;
+  const VERSION = 5;
   const state = {
     strokes: [],
     activeStroke: null,
@@ -37,6 +37,7 @@
     sweep: 0,
     sweepDuration: 8,
     gridMode: 0,
+    drumGrid: false,
     previousTime: performance.now(),
     width: 1,
     height: 1,
@@ -70,12 +71,16 @@
   const GRID_TOP = 0.08;
   const GRID_BOTTOM = 0.82;
   const GRID_MODES = [
-    { name: "Off", shortName: "Off", beats: 0, pitchIndices: [] },
-    { name: "Rhythm", shortName: "32×3", beats: 32, pitchIndices: [3, 7, 11], rhythmGrid: true },
-    { name: "Octaves", shortName: "Oct", beats: 4, pitchIndices: [0, 7, 14] },
-    { name: "Chord", shortName: "Chord", beats: 8, pitchIndices: [0, 2, 4, 7, 9, 11, 14] },
-    { name: "Scale", shortName: "Scale", beats: 16, pitchIndices: C_MAJOR_MIDI.map((_, index) => index) },
+    { name: "Off", beats: 0, pitchIndices: [] },
+    { name: "Octaves", beats: 4, pitchIndices: [0, 7, 14] },
+    { name: "Chord", beats: 8, pitchIndices: [0, 2, 4, 7, 9, 11, 14] },
+    { name: "Scale", beats: 16, pitchIndices: C_MAJOR_MIDI.map((_, index) => index) },
   ];
+  const DRUM_GRID_STEPS = 16;
+  const DRUM_GRID_REPEATS = 4;
+  const DRUM_GRID_TOP = 0.66;
+  const DRUM_GRID_BOTTOM = 0.82;
+  const DRUM_LANES = { hat: 0.69, snare: 0.74, kick: 0.79 };
 
   class AudioEngine {
     constructor() {
@@ -332,13 +337,22 @@
     return node ? pointForGridNode(node, point.p) : point;
   }
 
-  function snapPercussionPoint(point, voiceName = state.voice) {
-    if (!state.gridMode) return point;
-    const snapped = snapPointToGrid(point);
-    const grid = currentGrid();
-    if (!grid.rhythmGrid) return snapped;
-    const lanePitchIndex = { kick: 3, snare: 7, hat: 11 }[voiceName] ?? 7;
-    return { ...snapped, y: gridYForPitchIndex(lanePitchIndex) };
+  function percussionPlacement(point, voiceName = state.voice) {
+    if (state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM) {
+      const step = clamp(Math.floor(point.x * DRUM_GRID_STEPS), 0, DRUM_GRID_STEPS - 1);
+      return {
+        inDrumGrid: true,
+        point: {
+          ...point,
+          x: (step + 0.5) / DRUM_GRID_STEPS,
+          y: DRUM_LANES[voiceName] ?? DRUM_LANES.snare,
+        },
+      };
+    }
+    return {
+      inDrumGrid: false,
+      point: state.gridMode ? snapPointToGrid(point) : point,
+    };
   }
 
   function appendGridPath(points, targetPoint) {
@@ -355,7 +369,8 @@
   }
 
   function placePercussion(point) {
-    const placedPoint = snapPercussionPoint(point);
+    const placement = percussionPlacement(point);
+    const placedPoint = placement.point;
     const last = state.lastPercussionPoint;
     if (last && Math.hypot(
       (placedPoint.x - last.x) * state.width,
@@ -418,11 +433,12 @@
     }
     if (state.instrumentKind === "percussion") {
       const last = state.lastPercussionPoint;
-      const candidate = snapPercussionPoint(point);
+      const placement = percussionPlacement(point);
+      const candidate = placement.point;
       const distance = last
         ? Math.hypot((candidate.x - last.x) * state.width, (candidate.y - last.y) * state.height)
         : Infinity;
-      if (state.gridMode ? distance >= 0.5 : distance >= 26) placePercussion(point);
+      if ((placement.inDrumGrid || state.gridMode) ? distance >= 0.5 : distance >= 26) placePercussion(point);
       return;
     }
     const points = state.activeStroke?.points;
@@ -727,13 +743,36 @@
       });
   }
 
-  function intersectionsAt(normalizedX) {
+  function repeatedSweepCrossed(targetX, previousSweep, currentSweep, repeats) {
+    const sweepAdvance = currentSweep >= previousSweep
+      ? currentSweep - previousSweep
+      : 1 - previousSweep + currentSweep;
+    if (sweepAdvance <= 0) return false;
+    const previousPhase = (previousSweep * repeats) % 1;
+    const distance = (targetX - previousPhase + 1) % 1;
+    return distance > 1e-7 && distance <= sweepAdvance * repeats + 1e-7;
+  }
+
+  function intersectionsAt(normalizedX, previousSweep = normalizedX) {
     const verticalTolerance = 3 / state.width;
     const hits = [];
     const nextTracks = new Map();
     state.strokes.forEach((stroke) => {
       if (stroke.kind === "dot") {
         const point = stroke.points[0];
+        if (state.drumGrid && point.y >= DRUM_GRID_TOP && point.y <= DRUM_GRID_BOTTOM) {
+          if (repeatedSweepCrossed(point.x, previousSweep, normalizedX, DRUM_GRID_REPEATS)) {
+            hits.push({
+              id: `percussion-${stroke.id}`,
+              kind: "percussion",
+              voice: stroke.voice,
+              color: stroke.color,
+              y: point.y,
+              x: (normalizedX * DRUM_GRID_REPEATS) % 1,
+            });
+          }
+          return;
+        }
         const hitRadius = (stroke.size / 2 + 2) / state.width;
         if (Math.abs(normalizedX - point.x) <= hitRadius) {
           hits.push({
@@ -815,28 +854,6 @@
     ctx.save();
     ctx.lineWidth = 1;
 
-    if (grid.rhythmGrid) {
-      grid.pitchIndices.forEach((pitchIndex, laneIndex) => {
-        const y = gridYForPitchIndex(pitchIndex) * state.height;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(state.width, y);
-        ctx.strokeStyle = laneIndex === 1 ? "rgba(180,140,255,.22)" : "rgba(255,255,255,.13)";
-        ctx.stroke();
-        for (let beat = 0; beat <= grid.beats; beat++) {
-          const x = beat / grid.beats * state.width;
-          const isMajorBeat = beat % 8 === 0;
-          ctx.beginPath();
-          ctx.moveTo(x, y - (isMajorBeat ? 6 : 3));
-          ctx.lineTo(x, y + (isMajorBeat ? 6 : 3));
-          ctx.strokeStyle = isMajorBeat ? "rgba(114,241,184,.44)" : "rgba(255,255,255,.2)";
-          ctx.stroke();
-        }
-      });
-      ctx.restore();
-      return;
-    }
-
     for (let beat = 0; beat <= grid.beats; beat++) {
       const x = beat / grid.beats * state.width;
       const isMajorBeat = beat % Math.max(1, grid.beats / 4) === 0;
@@ -859,25 +876,72 @@
     ctx.restore();
   }
 
-  function drawSweep() {
-    const x = state.sweep * state.width;
+  function drawDrumGrid() {
+    if (!state.drumGrid) return;
+    const top = DRUM_GRID_TOP * state.height;
+    const bottom = DRUM_GRID_BOTTOM * state.height;
+    ctx.save();
+    ctx.fillStyle = "rgba(8,10,15,.42)";
+    ctx.fillRect(0, top, state.width, bottom - top);
+
+    for (let step = 0; step <= DRUM_GRID_STEPS; step++) {
+      const x = step / DRUM_GRID_STEPS * state.width;
+      const isQuarter = step % 4 === 0;
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.strokeStyle = isQuarter ? "rgba(114,241,184,.25)" : "rgba(255,255,255,.075)";
+      ctx.lineWidth = isQuarter ? 1.25 : 1;
+      ctx.stroke();
+    }
+
+    const laneColors = { hat: "232,237,244", snare: "255,77,141", kick: "94,225,115" };
+    Object.entries(DRUM_LANES).forEach(([voice, normalizedY]) => {
+      const y = normalizedY * state.height;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(state.width, y);
+      ctx.strokeStyle = `rgba(${laneColors[voice]},.22)`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = "rgba(255,255,255,.42)";
+    ctx.font = "700 9px system-ui, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText("DRUM LOOP ×4", 7, top + 5);
+    ctx.restore();
+  }
+
+  function drawSweepSegment(normalizedX, top, bottom) {
+    const x = normalizedX * state.width;
     const gradient = ctx.createLinearGradient(x, 0, x + 18, 0);
     gradient.addColorStop(0, "rgba(255,255,255,.92)");
     gradient.addColorStop(.18, "rgba(114,241,184,.38)");
     gradient.addColorStop(1, "rgba(114,241,184,0)");
-    ctx.save();
     ctx.fillStyle = gradient;
+    ctx.fillRect(x - 1, top, 19, Math.max(0, bottom - top));
+  }
+
+  function drawSweep() {
+    ctx.save();
     ctx.shadowColor = "rgba(114,241,184,.85)";
     ctx.shadowBlur = 15;
-    ctx.fillRect(x - 1, 0, 19, state.height);
+    if (state.drumGrid) {
+      drawSweepSegment(state.sweep, 0, DRUM_GRID_TOP * state.height);
+      drawSweepSegment((state.sweep * DRUM_GRID_REPEATS) % 1, DRUM_GRID_TOP * state.height, DRUM_GRID_BOTTOM * state.height);
+      drawSweepSegment(state.sweep, DRUM_GRID_BOTTOM * state.height, state.height);
+    } else {
+      drawSweepSegment(state.sweep, 0, state.height);
+    }
     ctx.restore();
   }
 
   function drawIntersections(hits) {
     if (!hits.length) return;
-    const x = state.sweep * state.width;
     ctx.save();
     hits.forEach((hit) => {
+      const x = (hit.x ?? state.sweep) * state.width;
       const y = hit.y * state.height;
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
@@ -897,11 +961,12 @@
       const previousSweep = state.sweep;
       state.sweep = (state.sweep + dt / state.sweepDuration) % 1;
       if (state.sweep < previousSweep) intersectionTracks.clear();
-      hits = intersectionsAt(state.sweep);
+      hits = intersectionsAt(state.sweep, previousSweep);
       audio?.update(hits);
     }
     ctx.clearRect(0, 0, state.width, state.height);
     drawGrid();
+    drawDrumGrid();
     state.strokes.forEach(drawStroke);
     if (state.playing) {
       drawSweep();
@@ -992,11 +1057,11 @@
 
   function updateGridButton() {
     const grid = currentGrid();
-    gridModeLabel.textContent = grid.shortName;
+    gridButton.textContent = `Grid: ${grid.name}`;
     gridButton.setAttribute("aria-pressed", String(Boolean(grid.beats)));
     gridButton.setAttribute("aria-label", grid.beats
-      ? `${grid.name} grid with ${grid.beats} time divisions${grid.rhythmGrid ? " and three instrument lanes" : ""}`
-      : "Grid is off");
+      ? `${grid.name} melodic grid with ${grid.beats} time divisions`
+      : "Melodic grid is off");
   }
 
   function cycleGrid() {
@@ -1004,9 +1069,22 @@
     updateGridButton();
     scheduleSave();
     const grid = currentGrid();
-    showToast(grid.beats
-      ? (grid.rhythmGrid ? "Rhythm: 32 steps × 3 lanes" : `${grid.name}: ${grid.beats} beats`)
-      : "Grid off");
+    showToast(grid.beats ? `${grid.name}: ${grid.beats} beats` : "Grid off");
+  }
+
+  function updateDrumGridButton() {
+    drumGridButton.textContent = state.drumGrid ? "Drum grid: 16 ×4" : "Drum grid: Off";
+    drumGridButton.setAttribute("aria-pressed", String(state.drumGrid));
+    drumGridButton.setAttribute("aria-label", state.drumGrid
+      ? "Drum grid on: 16 steps repeated four times"
+      : "Drum grid is off");
+  }
+
+  function toggleDrumGrid() {
+    state.drumGrid = !state.drumGrid;
+    updateDrumGridButton();
+    scheduleSave();
+    showToast(state.drumGrid ? "Drum loop: 16 steps × 4" : "Drum grid off");
   }
 
   function updateEmptyState() {
@@ -1021,6 +1099,7 @@
       name: "My Draw Music composition",
       sweepDuration: state.sweepDuration,
       gridMode: state.gridMode,
+      drumGrid: state.drumGrid,
       strokes: state.strokes,
     };
   }
@@ -1039,25 +1118,41 @@
     );
     state.strokes = validStrokes.map((stroke) => {
       const isDot = stroke.kind === "dot" || Boolean(percussionSettings[stroke.voice]);
+      const voice = isDot
+        ? (percussionSettings[stroke.voice] ? stroke.voice : "kick")
+        : (voiceSettings[stroke.voice] ? stroke.voice : "bloom");
+      const points = stroke.points.map((point) => ({
+        x: clamp(Number(point.x), 0, 1),
+        y: clamp(Number(point.y), 0, 1),
+        p: clamp(Number(point.p) || .55, .1, 1),
+      }));
       return {
         id: nextStrokeId++,
         kind: isDot ? "dot" : "line",
         geometry: stroke.geometry === "grid" ? "grid" : "spline",
         color: stroke.color,
-        voice: isDot
-          ? (percussionSettings[stroke.voice] ? stroke.voice : "kick")
-          : (voiceSettings[stroke.voice] ? stroke.voice : "bloom"),
+        voice,
         size: Number(stroke.size) || (isDot ? 16 : 5.5),
-        points: stroke.points.map((point) => ({ x: clamp(Number(point.x), 0, 1), y: clamp(Number(point.y), 0, 1), p: clamp(Number(point.p) || .55, .1, 1) })),
+        points,
       };
     }).filter((stroke) => stroke.points.length >= (stroke.kind === "dot" ? 1 : 2));
     state.sweepDuration = clamp(Number(data.sweepDuration) || 8, 4, 16);
     let savedGridMode = Math.round(Number(data.gridMode) || 0);
-    if ((Number(data.version) || 0) < 4 && savedGridMode > 0) savedGridMode += 1;
+    const sourceVersion = Number(data.version) || 0;
+    state.drumGrid = Boolean(data.drumGrid);
+    if (sourceVersion === 4) {
+      if (savedGridMode === 1) {
+        savedGridMode = 0;
+        state.drumGrid = true;
+      } else if (savedGridMode > 1) {
+        savedGridMode -= 1;
+      }
+    }
     state.gridMode = clamp(savedGridMode, 0, GRID_MODES.length - 1);
     tempoRange.value = String(state.sweepDuration);
     tempoOutput.value = `${state.sweepDuration}s`;
     updateGridButton();
+    updateDrumGridButton();
     updateEmptyState();
     scheduleSave();
     if (notify) showToast("Composition loaded");
@@ -1097,6 +1192,7 @@
   deleteCurveButton.addEventListener("click", toggleDeleteCurve);
   moreButton.addEventListener("click", toggleMore);
   gridButton.addEventListener("click", cycleGrid);
+  drumGridButton.addEventListener("click", toggleDrumGrid);
   swatches.forEach((button) => button.addEventListener("click", () => chooseColor(button)));
   tempoRange.addEventListener("input", () => {
     state.sweepDuration = Number(tempoRange.value);
@@ -1144,6 +1240,7 @@
   resizeCanvas();
   restoreLocal();
   updateGridButton();
+  updateDrumGridButton();
   updateEmptyState();
   requestAnimationFrame(render);
 })();

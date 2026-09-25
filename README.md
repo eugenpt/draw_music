@@ -7,8 +7,9 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Pressure-aware freehand drawing with seven melodic color/sound voices
 - Dot-based Kick, Snare, and Hi-hat percussion instruments
 - Tap for one beat or drag to paint an evenly spaced percussion sequence
-- One global grid toggle for a 32-step, three-lane Rhythm grid plus Octaves, Chord, and C-major Scale grids
-- Rhythm dots snap Kick, Snare, and Hi-hat to the lower, middle, and upper lanes
+- Optional bottom drum sequencer with 16 steps and Kick, Snare, and Hi-hat lanes
+- The drum playhead loops four times while the melodic playhead crosses the canvas once
+- Cycleable Octaves, Chord, and C-major Scale grids with musical snapping
 - Grid strokes follow neighboring horizontal, vertical, and diagonal edges
 - Tap-to-preview colors and an iOS-compatible audio unlock
 - Music-category audio sessions that remain audible through iPhone Silent mode
