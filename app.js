@@ -105,12 +105,14 @@
       filter.type = "lowpass";
       filter.frequency.value = settings.filter;
       filter.Q.value = voiceName === "spark" ? 5 : 1.4;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(settings.gain * 0.72, now + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      const previewVolume = settings.gain * 0.72;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(previewVolume, now + 0.055);
+      gain.gain.setValueAtTime(previewVolume, now + 0.1);
+      gain.gain.linearRampToValueAtTime(0, now + 0.24);
       osc.connect(filter).connect(gain).connect(this.master);
       osc.start(now);
-      osc.stop(now + 0.21);
+      osc.stop(now + 0.26);
     }
 
     update(hits) {
@@ -122,7 +124,6 @@
         const existing = this.voices.get(hit.id);
         if (existing) {
           existing.osc.frequency.setTargetAtTime(frequency, now, 0.018);
-          existing.gain.gain.setTargetAtTime(existing.volume, now, 0.025);
           return;
         }
 
@@ -136,10 +137,12 @@
         filter.type = "lowpass";
         filter.frequency.value = settings.filter;
         filter.Q.value = hit.voice === "spark" ? 5 : 1.4;
-        gain.gain.value = 0.0001;
+        gain.gain.setValueAtTime(0, now);
         osc.connect(filter).connect(gain).connect(this.master);
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(settings.gain, now + 0.035);
+        osc.start(now);
+        // A deliberately soft note-on prevents new polyphonic voices from
+        // adding a sharp edge to voices that are already sounding.
+        gain.gain.linearRampToValueAtTime(settings.gain, now + 0.085);
         this.voices.set(hit.id, { osc, gain, volume: settings.gain });
       });
 
@@ -150,9 +153,16 @@
 
     release(id, voice, now = this.context.currentTime) {
       this.voices.delete(id);
-      voice.gain.gain.cancelScheduledValues(now);
-      voice.gain.gain.setTargetAtTime(0.0001, now, 0.055);
-      voice.osc.stop(now + 0.28);
+      const gain = voice.gain.gain;
+      if (typeof gain.cancelAndHoldAtTime === "function") {
+        gain.cancelAndHoldAtTime(now);
+      } else {
+        const currentLevel = gain.value;
+        gain.cancelScheduledValues(now);
+        gain.setValueAtTime(currentLevel, now);
+      }
+      gain.linearRampToValueAtTime(0, now + 0.14);
+      voice.osc.stop(now + 0.17);
     }
 
     silence() {
