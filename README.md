@@ -11,6 +11,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Continuous play/pause sweep with adjustable duration
 - Polyphonic playback for every distinct playhead intersection
 - Visible black markers at all active intersections
+- Exact quadratic-spline intersection detection matching the rendered curves
 - Pentatonic pitch mapping from the canvas' vertical axis
 - Stroke eraser, undo, and clear
 - Automatic browser storage

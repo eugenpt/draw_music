@@ -265,44 +265,113 @@
     }
   }
 
+  function splineSegments(stroke) {
+    const points = stroke.points;
+    if (points.length < 2) return [];
+    if (points.length === 2) return [{ type: "line", start: points[0], end: points[1] }];
+
+    const segments = [];
+    let start = points[0];
+    for (let i = 1; i < points.length - 1; i++) {
+      const end = {
+        x: (points[i].x + points[i + 1].x) / 2,
+        y: (points[i].y + points[i + 1].y) / 2,
+        p: (points[i].p + points[i + 1].p) / 2,
+      };
+      segments.push({ type: "quadratic", start, control: points[i], end });
+      start = end;
+    }
+    segments.push({ type: "line", start, end: points[points.length - 1] });
+    return segments;
+  }
+
   function drawStroke(stroke) {
-    if (stroke.points.length < 2) return;
-    const points = stroke.points.map(canvasPoint);
+    const segments = splineSegments(stroke);
+    if (!segments.length) return;
+    const first = canvasPoint(segments[0].start);
     ctx.save();
     ctx.strokeStyle = stroke.color;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.shadowColor = stroke.color;
     ctx.shadowBlur = state.playing ? 5 : 2;
+    ctx.lineWidth = stroke.size;
     ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length - 1; i++) {
-      const midpointX = (points[i].x + points[i + 1].x) / 2;
-      const midpointY = (points[i].y + points[i + 1].y) / 2;
-      ctx.lineWidth = stroke.size * (0.72 + points[i].p * 0.52);
-      ctx.quadraticCurveTo(points[i].x, points[i].y, midpointX, midpointY);
-    }
-    const last = points[points.length - 1];
-    ctx.lineTo(last.x, last.y);
+    ctx.moveTo(first.x, first.y);
+    segments.forEach((segment) => {
+      const end = canvasPoint(segment.end);
+      if (segment.type === "quadratic") {
+        const control = canvasPoint(segment.control);
+        ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
+      } else {
+        ctx.lineTo(end.x, end.y);
+      }
+    });
     ctx.stroke();
     ctx.restore();
   }
 
+  function quadraticValue(start, control, end, t) {
+    const inverse = 1 - t;
+    return inverse * inverse * start + 2 * inverse * t * control + t * t * end;
+  }
+
+  function quadraticRootsAtX(segment, targetX) {
+    const a = segment.start.x - 2 * segment.control.x + segment.end.x;
+    const b = 2 * (segment.control.x - segment.start.x);
+    const c = segment.start.x - targetX;
+    const epsilon = 1e-9;
+
+    if (Math.abs(a) < epsilon) {
+      if (Math.abs(b) < epsilon) return [];
+      return [-c / b];
+    }
+
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant < -epsilon) return [];
+    if (Math.abs(discriminant) <= epsilon) return [-b / (2 * a)];
+    const root = Math.sqrt(discriminant);
+    return [(-b - root) / (2 * a), (-b + root) / (2 * a)];
+  }
+
+  function segmentIntersections(segment, targetX, verticalTolerance) {
+    const epsilon = 1e-7;
+    if (segment.type === "line") {
+      const dx = segment.end.x - segment.start.x;
+      if (Math.abs(dx) < epsilon) {
+        return Math.abs(targetX - segment.start.x) <= verticalTolerance
+          ? [(segment.start.y + segment.end.y) / 2]
+          : [];
+      }
+      const t = (targetX - segment.start.x) / dx;
+      if (t < -epsilon || t > 1 + epsilon) return [];
+      const boundedT = clamp(t, 0, 1);
+      return [segment.start.y + (segment.end.y - segment.start.y) * boundedT];
+    }
+
+    const xSpan = Math.max(segment.start.x, segment.control.x, segment.end.x)
+      - Math.min(segment.start.x, segment.control.x, segment.end.x);
+    if (xSpan < epsilon) {
+      return Math.abs(targetX - segment.start.x) <= verticalTolerance
+        ? [quadraticValue(segment.start.y, segment.control.y, segment.end.y, 0.5)]
+        : [];
+    }
+
+    return quadraticRootsAtX(segment, targetX)
+      .filter((t) => t >= -epsilon && t <= 1 + epsilon)
+      .map((t) => {
+        const boundedT = clamp(t, 0, 1);
+        return quadraticValue(segment.start.y, segment.control.y, segment.end.y, boundedT);
+      });
+  }
+
   function intersectionsAt(normalizedX) {
-    const tolerance = 5 / state.width;
+    const verticalTolerance = 3 / state.width;
     const hits = [];
     state.strokes.forEach((stroke) => {
-      const ys = [];
-      for (let i = 1; i < stroke.points.length; i++) {
-        const a = stroke.points[i - 1];
-        const b = stroke.points[i];
-        const minX = Math.min(a.x, b.x) - tolerance;
-        const maxX = Math.max(a.x, b.x) + tolerance;
-        if (normalizedX < minX || normalizedX > maxX) continue;
-        const dx = b.x - a.x;
-        const t = Math.abs(dx) < 0.00001 ? 0.5 : clamp((normalizedX - a.x) / dx, 0, 1);
-        ys.push(a.y + (b.y - a.y) * t);
-      }
+      const ys = splineSegments(stroke).flatMap((segment) =>
+        segmentIntersections(segment, normalizedX, verticalTolerance)
+      );
 
       // A single winding stroke can cross the playhead many times. Sort the
       // crossings vertically and merge only points that are visually the same
