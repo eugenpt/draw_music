@@ -4,7 +4,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 
 ## Features
 
-- Pressure-aware freehand drawing with four color/sound voices
+- Pressure-aware freehand drawing with seven color/sound voices
 - Tap-to-preview colors and an iOS-compatible audio unlock
 - Music-category audio sessions that remain audible through iPhone Silent mode
 - Explicit dual-channel output for centered headphone playback
@@ -14,6 +14,7 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Exact quadratic-spline intersection detection matching the rendered curves
 - Click-free attack and release envelopes for polyphonic note changes
 - Persistent intersection-to-oscillator tracking across animation frames
+- Three extended-register instruments: Tide, Reed, and Glass
 - Pentatonic pitch mapping from the canvas' vertical axis
 - Stroke eraser, undo, and clear
 - Automatic browser storage

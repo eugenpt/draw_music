@@ -44,10 +44,13 @@
   let intersectionTracks = new Map();
 
   const voiceSettings = {
-    bloom: { wave: "sine", gain: 0.12, filter: 2600, detune: 0 },
-    pluck: { wave: "triangle", gain: 0.1, filter: 1900, detune: 4 },
-    spark: { wave: "square", gain: 0.055, filter: 1350, detune: 7 },
-    buzz: { wave: "sawtooth", gain: 0.06, filter: 850, detune: -5 },
+    bloom: { wave: "sine", gain: 0.12, filter: 2600, detune: 0, transpose: 0 },
+    pluck: { wave: "triangle", gain: 0.1, filter: 1900, detune: 4, transpose: 0 },
+    spark: { wave: "square", gain: 0.055, filter: 1350, detune: 7, transpose: 0 },
+    buzz: { wave: "sawtooth", gain: 0.06, filter: 850, detune: -5, transpose: 0 },
+    tide: { wave: "sine", gain: 0.14, filter: 1450, detune: -3, transpose: -12 },
+    reed: { wave: "sawtooth", gain: 0.065, filter: 620, detune: 3, transpose: -5 },
+    glass: { wave: "sine", gain: 0.085, filter: 4600, detune: 6, transpose: 12 },
   };
 
   class AudioEngine {
@@ -102,7 +105,7 @@
       const filter = this.context.createBiquadFilter();
       const gain = this.context.createGain();
       osc.type = settings.wave;
-      osc.frequency.value = yToFrequency(normalizedY);
+      osc.frequency.value = frequencyForVoice(voiceName, normalizedY);
       osc.detune.value = settings.detune;
       filter.type = "lowpass";
       filter.frequency.value = settings.filter;
@@ -122,7 +125,7 @@
       const liveIds = new Set(hits.map((hit) => hit.id));
 
       hits.forEach((hit) => {
-        const frequency = yToFrequency(hit.y);
+        const frequency = frequencyForVoice(hit.voice, hit.y);
         const existing = this.voices.get(hit.id);
         if (existing) {
           existing.osc.frequency.setTargetAtTime(frequency, now, 0.018);
@@ -179,6 +182,11 @@
     const pentatonic = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33];
     const index = Math.round((1 - clamp(normalizedY, 0, 1)) * (pentatonic.length - 1));
     return 110 * Math.pow(2, pentatonic[index] / 12);
+  }
+
+  function frequencyForVoice(voiceName, normalizedY) {
+    const settings = voiceSettings[voiceName] || voiceSettings.bloom;
+    return yToFrequency(normalizedY) * Math.pow(2, (settings.transpose || 0) / 12);
   }
 
   function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
@@ -641,9 +649,11 @@
     scheduleSave();
   });
   clearButton.addEventListener("click", () => {
+    if (!state.playing) state.sweep = 0;
     if (!state.strokes.length) return;
     state.strokes = [];
     audio?.silence();
+    intersectionTracks.clear();
     updateEmptyState();
     scheduleSave();
     showToast("Canvas cleared");
