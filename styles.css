@@ -237,8 +237,6 @@ input[type="range"] { width: 100%; accent-color: var(--mint); }
 
 .grid-settings {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
   margin-bottom: 10px;
 }
 
@@ -262,6 +260,39 @@ input[type="range"] { width: 100%; accent-color: var(--mint); }
 }
 
 .settings-button:active { transform: scale(.985); }
+
+.grid-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: #dffced;
+}
+
+.grid-tool svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+}
+
+.grid-tool span {
+  max-width: 40px;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.grid-tool[aria-pressed="true"] {
+  background: rgba(114,241,184,.12);
+  color: var(--mint);
+}
 
 .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .text-button { padding: 10px 6px; border-radius: 11px; background: rgba(255,255,255,.06); font-size: 12px; font-weight: 650; white-space: nowrap; }

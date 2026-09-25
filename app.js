@@ -10,6 +10,7 @@
   const moreControls = document.querySelector("#moreControls");
   const gridButton = document.querySelector("#gridButton");
   const drumGridButton = document.querySelector("#drumGridButton");
+  const drumGridModeLabel = document.querySelector("#drumGridModeLabel");
   const tempoRange = document.querySelector("#tempoRange");
   const tempoOutput = document.querySelector("#tempoOutput");
   const undoButton = document.querySelector("#undoButton");
@@ -1073,7 +1074,7 @@
   }
 
   function updateDrumGridButton() {
-    drumGridButton.textContent = state.drumGrid ? "Drum grid: 16 ×4" : "Drum grid: Off";
+    drumGridModeLabel.textContent = state.drumGrid ? "16×4" : "Drum";
     drumGridButton.setAttribute("aria-pressed", String(state.drumGrid));
     drumGridButton.setAttribute("aria-label", state.drumGrid
       ? "Drum grid on: 16 steps repeated four times"

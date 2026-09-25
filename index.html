@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=15" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -53,6 +53,11 @@
             </button>
           </div>
 
+          <button id="drumGridButton" class="icon-button grid-tool" type="button" aria-label="Drum grid is off" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M4 15h16M8 5v14M12 5v14M16 5v14" /></svg>
+            <span id="drumGridModeLabel">Drum</span>
+          </button>
+
           <button id="moreButton" class="icon-button tool-button" type="button" aria-label="More options" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
           </button>
@@ -66,7 +71,6 @@
           </label>
           <div class="grid-settings">
             <button id="gridButton" class="settings-button" type="button" aria-label="Melodic grid is off">Grid: Off</button>
-            <button id="drumGridButton" class="settings-button" type="button" aria-label="Drum grid is off" aria-pressed="false">Drum grid: Off</button>
           </div>
           <div class="action-row">
             <button id="undoButton" class="text-button" type="button">Undo</button>
@@ -80,6 +84,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>
