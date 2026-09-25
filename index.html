@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=10" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -41,9 +41,14 @@
             <button class="color-swatch" data-color="#f8a5ff" data-voice="glass" type="button" role="radio" aria-checked="false" aria-label="Pink glass sound"></button>
           </div>
 
-          <button id="eraserButton" class="icon-button tool-button" type="button" aria-label="Eraser" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.3 3.7 4 4a2 2 0 0 1 0 2.8l-8.8 8.8a2 2 0 0 1-1.4.6H6.8a2 2 0 0 1-1.4-.6l-1.7-1.7a2 2 0 0 1 0-2.8l9.8-11a2 2 0 0 1 2.8-.1ZM8.2 13.3l4.5 4.5" /></svg>
-          </button>
+          <div class="eraser-tools" aria-label="Eraser tools">
+            <button id="eraserButton" class="icon-button tool-button" type="button" aria-label="Erase part of curve" title="Erase part" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.3 3.7 4 4a2 2 0 0 1 0 2.8l-8.8 8.8a2 2 0 0 1-1.4.6H6.8a2 2 0 0 1-1.4-.6l-1.7-1.7a2 2 0 0 1 0-2.8l9.8-11a2 2 0 0 1 2.8-.1ZM8.2 13.3l4.5 4.5" /></svg>
+            </button>
+            <button id="deleteCurveButton" class="icon-button tool-button" type="button" aria-label="Delete whole curve" title="Delete curve" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17c3-8 7-8 10-3 2 3 4 2 8-5M15.5 4.5l5 5m0-5-5 5" /></svg>
+            </button>
+          </div>
 
           <button id="moreButton" class="icon-button tool-button" type="button" aria-label="More options" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
@@ -68,6 +73,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
   </body>
 </html>

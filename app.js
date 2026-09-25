@@ -5,6 +5,7 @@
   const ctx = canvas.getContext("2d", { alpha: true });
   const playButton = document.querySelector("#playButton");
   const eraserButton = document.querySelector("#eraserButton");
+  const deleteCurveButton = document.querySelector("#deleteCurveButton");
   const moreButton = document.querySelector("#moreButton");
   const moreControls = document.querySelector("#moreControls");
   const tempoRange = document.querySelector("#tempoRange");
@@ -25,6 +26,7 @@
     activeStroke: null,
     drawing: false,
     erasing: false,
+    deletingCurve: false,
     color: "#72f1b8",
     voice: "bloom",
     playing: false,
@@ -220,6 +222,10 @@
       eraseAt(point);
       return;
     }
+    if (state.deletingCurve) {
+      deleteCurveAt(point);
+      return;
+    }
     state.activeStroke = {
       id: nextStrokeId++,
       color: state.color,
@@ -236,6 +242,10 @@
     const point = pointFromEvent(event);
     if (state.erasing) {
       eraseAt(point);
+      return;
+    }
+    if (state.deletingCurve) {
+      deleteCurveAt(point);
       return;
     }
     const points = state.activeStroke?.points;
@@ -272,7 +282,114 @@
     return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
   }
 
+  function interpolatePoint(a, b, t) {
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      p: a.p + (b.p - a.p) * t,
+    };
+  }
+
+  function segmentOutsideEraser(point, a, b, radius) {
+    const centerX = point.x * state.width;
+    const centerY = point.y * state.height;
+    const startX = a.x * state.width;
+    const startY = a.y * state.height;
+    const vectorX = (b.x - a.x) * state.width;
+    const vectorY = (b.y - a.y) * state.height;
+    const offsetX = startX - centerX;
+    const offsetY = startY - centerY;
+    const quadraticA = vectorX * vectorX + vectorY * vectorY;
+    const quadraticB = 2 * (offsetX * vectorX + offsetY * vectorY);
+    const quadraticC = offsetX * offsetX + offsetY * offsetY - radius * radius;
+    const cuts = [0, 1];
+
+    if (quadraticA > 1e-9) {
+      const discriminant = quadraticB * quadraticB - 4 * quadraticA * quadraticC;
+      if (discriminant > 1e-9) {
+        const root = Math.sqrt(discriminant);
+        const first = (-quadraticB - root) / (2 * quadraticA);
+        const second = (-quadraticB + root) / (2 * quadraticA);
+        if (first > 0 && first < 1) cuts.push(first);
+        if (second > 0 && second < 1) cuts.push(second);
+      }
+    }
+
+    cuts.sort((first, second) => first - second);
+    const parts = [];
+    let erased = false;
+    for (let i = 1; i < cuts.length; i++) {
+      const start = cuts[i - 1];
+      const end = cuts[i];
+      if (end - start < 1e-7) continue;
+      const middle = (start + end) / 2;
+      const sampleX = startX + vectorX * middle - centerX;
+      const sampleY = startY + vectorY * middle - centerY;
+      const outside = sampleX * sampleX + sampleY * sampleY > radius * radius;
+      if (outside) {
+        parts.push([interpolatePoint(a, b, start), interpolatePoint(a, b, end)]);
+      } else {
+        erased = true;
+      }
+    }
+    return { parts, erased };
+  }
+
   function eraseAt(point) {
+    const radius = 21;
+    let changed = false;
+    const nextStrokes = [];
+    state.strokes.forEach((stroke) => {
+      let touched = false;
+      const fragments = [];
+      let fragment = [];
+      for (let i = 1; i < stroke.points.length; i++) {
+        const previous = stroke.points[i - 1];
+        const current = stroke.points[i];
+        const clipped = segmentOutsideEraser(point, previous, current, radius);
+        if (clipped.erased) touched = true;
+        clipped.parts.forEach(([start, end]) => {
+          const last = fragment[fragment.length - 1];
+          const joinsPrevious = last
+            && Math.hypot((last.x - start.x) * state.width, (last.y - start.y) * state.height) < 0.5;
+          if (!joinsPrevious) {
+            if (fragment.length >= 2) fragments.push(fragment);
+            fragment = [start];
+          }
+          fragment.push(end);
+        });
+        if (clipped.erased && !clipped.parts.length) {
+          if (fragment.length >= 2) fragments.push(fragment);
+          fragment = [];
+        } else if (clipped.erased && clipped.parts.length > 1) {
+          if (fragment.length >= 2) fragments.push(fragment);
+          fragment = [];
+        }
+      }
+      if (fragment.length >= 2) fragments.push(fragment);
+
+      if (!touched) {
+        nextStrokes.push(stroke);
+        return;
+      }
+
+      changed = true;
+      fragments.forEach((points, index) => {
+        nextStrokes.push({
+          ...stroke,
+          id: index === 0 ? stroke.id : nextStrokeId++,
+          points,
+        });
+      });
+    });
+    if (changed) {
+      state.strokes = nextStrokes;
+      updateEmptyState();
+      scheduleSave();
+    }
+  }
+
+  function deleteCurveAt(point) {
     const radius = 21;
     const before = state.strokes.length;
     state.strokes = state.strokes.filter((stroke) => {
@@ -539,7 +656,9 @@
     state.color = button.dataset.color;
     state.voice = button.dataset.voice;
     state.erasing = false;
+    state.deletingCurve = false;
     eraserButton.setAttribute("aria-pressed", "false");
+    deleteCurveButton.setAttribute("aria-pressed", "false");
     canvas.style.cursor = "crosshair";
     swatches.forEach((swatch) => {
       const selected = swatch === button;
@@ -557,8 +676,18 @@
 
   function toggleEraser() {
     state.erasing = !state.erasing;
+    state.deletingCurve = false;
     eraserButton.setAttribute("aria-pressed", String(state.erasing));
+    deleteCurveButton.setAttribute("aria-pressed", "false");
     canvas.style.cursor = state.erasing ? "cell" : "crosshair";
+  }
+
+  function toggleDeleteCurve() {
+    state.deletingCurve = !state.deletingCurve;
+    state.erasing = false;
+    deleteCurveButton.setAttribute("aria-pressed", String(state.deletingCurve));
+    eraserButton.setAttribute("aria-pressed", "false");
+    canvas.style.cursor = state.deletingCurve ? "not-allowed" : "crosshair";
   }
 
   function toggleMore() {
@@ -636,6 +765,7 @@
   canvas.addEventListener("pointercancel", onPointerUp);
   playButton.addEventListener("click", togglePlay);
   eraserButton.addEventListener("click", toggleEraser);
+  deleteCurveButton.addEventListener("click", toggleDeleteCurve);
   moreButton.addEventListener("click", toggleMore);
   swatches.forEach((button) => button.addEventListener("click", () => chooseColor(button)));
   tempoRange.addEventListener("input", () => {

@@ -15,8 +15,10 @@ A mobile-first canvas instrument. Draw colorful lines, press play, and listen as
 - Click-free attack and release envelopes for polyphonic note changes
 - Persistent intersection-to-oscillator tracking across animation frames
 - Three extended-register instruments: Tide, Reed, and Glass
+- Compact two-row instrument palette for mobile screens
 - Pentatonic pitch mapping from the canvas' vertical axis
-- Stroke eraser, undo, and clear
+- Paint-style partial eraser plus a separate whole-curve delete tool
+- Undo and clear controls
 - Automatic browser storage
 - JSON import and export
 - Responsive, touch-friendly UI
