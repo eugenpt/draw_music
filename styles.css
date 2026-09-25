@@ -235,21 +235,38 @@ button { -webkit-tap-highlight-color: transparent; }
 .tempo-control output { color: #f7f6f2; text-align: right; font-variant-numeric: tabular-nums; }
 input[type="range"] { width: 100%; accent-color: var(--mint); }
 
-.grid-button {
-  width: 100%;
-  margin: 0 0 10px;
-  padding: 9px 12px;
-  border: 1px solid rgba(114,241,184,.16);
-  border-radius: 11px;
-  background: rgba(114,241,184,.07);
+.grid-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   color: #dffced;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  cursor: pointer;
 }
 
-.grid-button:active { transform: scale(.985); }
+.grid-tool svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+}
+
+.grid-tool span {
+  max-width: 40px;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: .01em;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.grid-tool[aria-pressed="true"] {
+  background: rgba(114,241,184,.12);
+  color: var(--mint);
+}
 
 .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .text-button { padding: 10px 6px; border-radius: 11px; background: rgba(255,255,255,.06); font-size: 12px; font-weight: 650; white-space: nowrap; }

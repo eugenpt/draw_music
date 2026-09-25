@@ -9,6 +9,7 @@
   const moreButton = document.querySelector("#moreButton");
   const moreControls = document.querySelector("#moreControls");
   const gridButton = document.querySelector("#gridButton");
+  const gridModeLabel = document.querySelector("#gridModeLabel");
   const tempoRange = document.querySelector("#tempoRange");
   const tempoOutput = document.querySelector("#tempoOutput");
   const undoButton = document.querySelector("#undoButton");
@@ -21,7 +22,7 @@
   const swatches = [...document.querySelectorAll(".color-swatch")];
 
   const STORAGE_KEY = "draw-music-composition-v1";
-  const VERSION = 3;
+  const VERSION = 4;
   const state = {
     strokes: [],
     activeStroke: null,
@@ -69,10 +70,11 @@
   const GRID_TOP = 0.08;
   const GRID_BOTTOM = 0.82;
   const GRID_MODES = [
-    { name: "Off", beats: 0, pitchIndices: [] },
-    { name: "Octaves", beats: 4, pitchIndices: [0, 7, 14] },
-    { name: "Chord", beats: 8, pitchIndices: [0, 2, 4, 7, 9, 11, 14] },
-    { name: "Scale", beats: 16, pitchIndices: C_MAJOR_MIDI.map((_, index) => index) },
+    { name: "Off", shortName: "Off", beats: 0, pitchIndices: [] },
+    { name: "Rhythm", shortName: "32×3", beats: 32, pitchIndices: [3, 7, 11], rhythmGrid: true },
+    { name: "Octaves", shortName: "Oct", beats: 4, pitchIndices: [0, 7, 14] },
+    { name: "Chord", shortName: "Chord", beats: 8, pitchIndices: [0, 2, 4, 7, 9, 11, 14] },
+    { name: "Scale", shortName: "Scale", beats: 16, pitchIndices: C_MAJOR_MIDI.map((_, index) => index) },
   ];
 
   class AudioEngine {
@@ -330,6 +332,15 @@
     return node ? pointForGridNode(node, point.p) : point;
   }
 
+  function snapPercussionPoint(point, voiceName = state.voice) {
+    if (!state.gridMode) return point;
+    const snapped = snapPointToGrid(point);
+    const grid = currentGrid();
+    if (!grid.rhythmGrid) return snapped;
+    const lanePitchIndex = { kick: 3, snare: 7, hat: 11 }[voiceName] ?? 7;
+    return { ...snapped, y: gridYForPitchIndex(lanePitchIndex) };
+  }
+
   function appendGridPath(points, targetPoint) {
     const targetNode = gridNodeForPoint(targetPoint);
     const currentNode = gridNodeForPoint(points[points.length - 1]);
@@ -344,7 +355,7 @@
   }
 
   function placePercussion(point) {
-    const placedPoint = state.gridMode ? snapPointToGrid(point) : point;
+    const placedPoint = snapPercussionPoint(point);
     const last = state.lastPercussionPoint;
     if (last && Math.hypot(
       (placedPoint.x - last.x) * state.width,
@@ -407,7 +418,7 @@
     }
     if (state.instrumentKind === "percussion") {
       const last = state.lastPercussionPoint;
-      const candidate = state.gridMode ? snapPointToGrid(point) : point;
+      const candidate = snapPercussionPoint(point);
       const distance = last
         ? Math.hypot((candidate.x - last.x) * state.width, (candidate.y - last.y) * state.height)
         : Infinity;
@@ -804,6 +815,28 @@
     ctx.save();
     ctx.lineWidth = 1;
 
+    if (grid.rhythmGrid) {
+      grid.pitchIndices.forEach((pitchIndex, laneIndex) => {
+        const y = gridYForPitchIndex(pitchIndex) * state.height;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(state.width, y);
+        ctx.strokeStyle = laneIndex === 1 ? "rgba(180,140,255,.22)" : "rgba(255,255,255,.13)";
+        ctx.stroke();
+        for (let beat = 0; beat <= grid.beats; beat++) {
+          const x = beat / grid.beats * state.width;
+          const isMajorBeat = beat % 8 === 0;
+          ctx.beginPath();
+          ctx.moveTo(x, y - (isMajorBeat ? 6 : 3));
+          ctx.lineTo(x, y + (isMajorBeat ? 6 : 3));
+          ctx.strokeStyle = isMajorBeat ? "rgba(114,241,184,.44)" : "rgba(255,255,255,.2)";
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+      return;
+    }
+
     for (let beat = 0; beat <= grid.beats; beat++) {
       const x = beat / grid.beats * state.width;
       const isMajorBeat = beat % Math.max(1, grid.beats / 4) === 0;
@@ -959,9 +992,10 @@
 
   function updateGridButton() {
     const grid = currentGrid();
-    gridButton.textContent = `Grid: ${grid.name}`;
+    gridModeLabel.textContent = grid.shortName;
+    gridButton.setAttribute("aria-pressed", String(Boolean(grid.beats)));
     gridButton.setAttribute("aria-label", grid.beats
-      ? `${grid.name} grid with ${grid.beats} time divisions`
+      ? `${grid.name} grid with ${grid.beats} time divisions${grid.rhythmGrid ? " and three instrument lanes" : ""}`
       : "Grid is off");
   }
 
@@ -970,7 +1004,9 @@
     updateGridButton();
     scheduleSave();
     const grid = currentGrid();
-    showToast(grid.beats ? `${grid.name}: ${grid.beats} beats` : "Grid off");
+    showToast(grid.beats
+      ? (grid.rhythmGrid ? "Rhythm: 32 steps × 3 lanes" : `${grid.name}: ${grid.beats} beats`)
+      : "Grid off");
   }
 
   function updateEmptyState() {
@@ -1016,7 +1052,9 @@
       };
     }).filter((stroke) => stroke.points.length >= (stroke.kind === "dot" ? 1 : 2));
     state.sweepDuration = clamp(Number(data.sweepDuration) || 8, 4, 16);
-    state.gridMode = clamp(Math.round(Number(data.gridMode) || 0), 0, GRID_MODES.length - 1);
+    let savedGridMode = Math.round(Number(data.gridMode) || 0);
+    if ((Number(data.version) || 0) < 4 && savedGridMode > 0) savedGridMode += 1;
+    state.gridMode = clamp(savedGridMode, 0, GRID_MODES.length - 1);
     tempoRange.value = String(state.sweepDuration);
     tempoOutput.value = `${state.sweepDuration}s`;
     updateGridButton();

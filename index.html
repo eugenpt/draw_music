@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Draw a picture, then listen as the playhead sweeps across it." />
     <title>Draw Music</title>
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body>
     <main class="app" aria-label="Draw Music canvas instrument">
@@ -53,6 +53,11 @@
             </button>
           </div>
 
+          <button id="gridButton" class="icon-button grid-tool" type="button" aria-label="Grid is off">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16" /></svg>
+            <span id="gridModeLabel">Off</span>
+          </button>
+
           <button id="moreButton" class="icon-button tool-button" type="button" aria-label="More options" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
           </button>
@@ -64,7 +69,6 @@
             <input id="tempoRange" type="range" min="4" max="16" step="1" value="8" aria-label="Sweep duration in seconds" />
             <output id="tempoOutput" for="tempoRange">8s</output>
           </label>
-          <button id="gridButton" class="grid-button" type="button" aria-label="Grid is off">Grid: Off</button>
           <div class="action-row">
             <button id="undoButton" class="text-button" type="button">Undo</button>
             <button id="saveButton" class="text-button" type="button">Save JSON</button>
@@ -77,6 +81,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
       <input id="fileInput" type="file" accept="application/json,.json" hidden />
     </main>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
   </body>
 </html>
